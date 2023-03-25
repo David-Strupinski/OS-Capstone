@@ -42,15 +42,30 @@ class EFIImage:
 
 
     def create(self):
-        self._cmd(["dd", "if=/dev/zero", "of=%s" % self._image,
-                  "bs=%d" % self._blockSize, "count=1",
-                  "seek=%d" % (self._sizeBlocks - 1)])
+        from sys import platform
+        if platform == 'darwin':
+            # FIXME: volname is different from partition-name as shown in
+            # hdiutil imageinfo.  gpt(8) claims to be able to label partitions,
+            # but doesn't work on disk images somehow
+            # https://apple.stackexchange.com/a/143579/277954
+            self._cmd(['hdiutil', 'create',
+                '-volname', 'UEFI',
+                '-size', '%d' % self._sizeMB,
+                '-layout', 'GPTSPUD',
+                '-fs', 'FAT32',
+                self._image])
+            os.rename(self._image + '.dmg', self._image)
+        else:
+            # we assume Linux
+            self._cmd(["dd", "if=/dev/zero", "of=%s" % self._image,
+                      "bs=%d" % self._blockSize, "count=1",
+                      "seek=%d" % (self._sizeBlocks - 1)])
 
-        self._cmd(["/sbin/parted", "-s", self._image, "mktable", "gpt"])
-        self._cmd(["/sbin/parted", "-s", self._image, "mkpart", "primary", "fat32",
-                  "%ds" % self._startBlock, "%ds" % self._partSizeBlocks])
-        self._cmd(["/sbin/parted", "-s", self._image, "align-check", "optimal", "1"])
-        self._cmd(["/sbin/parted", "-s", self._image, "name", "1", "UEFI"])
+            self._cmd(["/sbin/parted", "-s", self._image, "mktable", "gpt"])
+            self._cmd(["/sbin/parted", "-s", self._image, "mkpart", "primary", "fat32",
+                      "%ds" % self._startBlock, "%ds" % self._partSizeBlocks])
+            self._cmd(["/sbin/parted", "-s", self._image, "align-check", "optimal", "1"])
+            self._cmd(["/sbin/parted", "-s", self._image, "name", "1", "UEFI"])
 
         self._cmd(["mformat", "-i", self._mformatImage, "-T",
                   str(self._partSizeBlocks), "-h", "1", "-s", "1"])

@@ -158,7 +158,7 @@ cCompiler arch compiler opt_flags opts phase src obj =
                 ++ [ Str f | f <- extraDefines opts ]
         deps = (optDependencies opts) ++ (extraDependencies opts)
     in
-      [ Str compiler ] ++ flags ++ (map Str opt_flags)
+      [ Str compiler ] ++ (map Str opt_flags) ++ flags
       ++ concat [ [ NStr "-I", i ] | i <- incls ]
       ++ [ Str "-o", Out arch obj,
            Str "-c", In (if phase == "src" then SrcTree else BuildTree) phase src ]
@@ -283,11 +283,11 @@ assembler arch compiler opt_flags opts src obj =
 --
 -- Create a library from a set of object files
 --
-archive :: String -> Options -> [String] -> [String] -> String -> String -> [ RuleToken ]
-archive arch opts objs libs name libname =
+archive :: String -> String -> Options -> [String] -> [String] -> String -> String -> [ RuleToken ]
+archive arch ar opts objs libs name libname =
     [ Str "rm -f ", Out arch libname ]
     ++
-    [ NL, Str "ar crT ", Out arch libname ]
+    [ NL, Str ar, Str " crT ", Out arch libname ]
     ++
     [ In BuildTree arch o | o <- objs ]
     ++

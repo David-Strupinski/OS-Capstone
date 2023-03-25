@@ -544,7 +544,7 @@ void debug_print_capability(struct capability *cap)
 {
     char buf[256];
     debug_snprint_capability(buf, sizeof(buf), cap);
-    debug_printf("Capability: %s\n");
+    debug_printf("Capability: %s\n", buf);
 }
 
 
@@ -584,7 +584,7 @@ void debug_print_cap_at_capref(struct capref cap)
 {
     char buf[256];
     debug_snprint_cap_at_capref(buf, sizeof(buf), cap);
-    debug_printf("Capability: %s\n");
+    debug_printf("Capability: %s\n", buf);
 }
 
 

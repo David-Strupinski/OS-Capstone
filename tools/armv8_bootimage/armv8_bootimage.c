@@ -32,6 +32,12 @@
 #include <string.h>
 #include <unistd.h>
 
+/* port R_AARCH64_RELATIVE definition if we are on macOS */
+#ifdef __APPLE__
+/* from /usr/include/elf.h */
+#    define R_AARCH64_RELATIVE 1027 /* Adjust by program base. */
+#endif
+
 /* We need to be able to parse menu.lst files, create multiboot images. */
 #include "../../include/grubmenu.h"
 #include "../../include/multiboot2.h"
@@ -594,7 +600,7 @@ int main(int argc, char *argv[])
 
     blob.multiboot = mb_base;
     blob.multiboot_size = mb_size;
-    
+
     blob.modules = modules[0].paddr;
     for (size_t i = 0; i < menu->nmodules + 2; i++) {
         blob.modules_size += modules[i].len;

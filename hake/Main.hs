@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 
 {-
   Hake: a meta build system for Barrelfish
@@ -236,7 +237,11 @@ driveGhc o srcDB hakefiles rulef = do
         ([IIDecl $ simpleImportDecl $ mkModuleName m |
             m <- modules] ++
          [IIDecl $ (simpleImportDecl $ mkModuleName m) {
+#if MIN_VERSION_ghc(8,10,0)
+                ideclQualified = QualifiedPre
+#else
                 ideclQualified = True
+#endif
           } | m <- qualified_modules])
 
     -- Collect rules from Hakefiles

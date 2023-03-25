@@ -81,7 +81,7 @@ int sprint_cap(char *buf, size_t len, struct capability *cap)
     case ObjType_L2CNode: {
         int ret = snprintf(buf, len, "L2 CNode cap "
                            "(base=%#"PRIxGENPADDR", rights mask %#"PRIxCAPRIGHTS")",
-                           get_address(cap), cap->u.l1cnode.rightsmask);
+                           get_address(cap), cap->u.l2cnode.rightsmask);
         return ret;
     }
 

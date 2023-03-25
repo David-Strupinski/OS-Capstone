@@ -56,11 +56,13 @@ ourCommonFlags = [ Str "-fno-unwind-tables",
 cFlags = ArchDefaults.commonCFlags
          ++ ArchDefaults.commonFlags
          ++ ourCommonFlags
+         ++ map Str Config.aarch64_flags
 
 cxxFlags = ArchDefaults.commonCxxFlags
            ++ ArchDefaults.commonFlags
            ++ ourCommonFlags
            ++ [Str "-std=gnu++11"]
+           ++ map Str Config.aarch64_flags
 
 cDefines = ArchDefaults.cDefines options
 
@@ -97,7 +99,7 @@ makeDepend = ArchDefaults.makeDepend arch compiler
 makeCxxDepend  = ArchDefaults.makeCxxDepend arch cxxcompiler
 cToAssembler = ArchDefaults.cToAssembler arch compiler Config.cOptFlags
 assembler = ArchDefaults.assembler arch compiler Config.cOptFlags
-archive = ArchDefaults.archive arch
+archive = ArchDefaults.archive arch ar
 linker = ArchDefaults.linker arch compiler
 ldtLinker = ArchDefaults.ldtLinker arch compiler
 strip = ArchDefaults.strip arch objcopy
@@ -148,7 +150,7 @@ kernelLdFlags = [ Str "-Wl,-N",
                   Str "-nostdlib",
                   Str "-Wl,--fatal-warnings",
                   Str "-Wl,--build-id=none"
-                ]
+                ] ++ map Str Config.aarch64_flags
 
 
 --

@@ -185,8 +185,8 @@ int main(int argc, char *argv[])
             platform = "UNKNOWN";
     }
 
-    // this print statement shoudl remain here
-    grading_printf("init domain starting on core %" PRIuCOREID " (%s)", my_core_id, platform);
+    // this print statement should remain here
+    grading_printf("init domain starting on core %" PRIuCOREID " (%s)\n", my_core_id, platform);
     fflush(stdout);
 
     if(my_core_id == 0) return bsp_main(argc, argv);

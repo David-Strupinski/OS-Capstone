@@ -14,8 +14,8 @@ IMAGE_NAME=barrelfish-aos
 IMAGE_TAG=22.04-lts
 
 
-build: Dockerfile install.sh entrypoint.sh
-	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+build: Dockerfile entrypoint.sh
+	docker build --no-cache -t $(IMAGE_NAME):$(IMAGE_TAG) .
 
 publish: build
 	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(DOCKER_HUB_USER)/$(IMAGE_NAME):$(IMAGE_TAG)

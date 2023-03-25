@@ -20,7 +20,7 @@ import qualified Args
 import Data.List
 import Data.Maybe
 import System.FilePath
-import Tools (findTool, ToolDetails, toolPath, toolPrefix)
+import Tools (findTool, ToolDetails, toolPath, toolPrefix, extraCFlags)
 import qualified Tools
 
 -- Set by hake.sh
@@ -64,11 +64,13 @@ arm_cxx      = arm_gnu_tool "g++"
 -- ARM AArch64
 aarch64_gnu_tool = findTool (toolPath aarch64_tools) (toolPrefix aarch64_tools)
 aarch64_cc       = aarch64_gnu_tool "gcc"
+aarch64_ld       = aarch64_gnu_tool "ld"
 aarch64_objcopy  = aarch64_gnu_tool "objcopy"
 aarch64_objdump  = aarch64_gnu_tool "objdump"
 aarch64_ar       = aarch64_gnu_tool "ar"
 aarch64_ranlib   = aarch64_gnu_tool "ranlib"
 aarch64_cxx      = aarch64_gnu_tool "g++"
+aarch64_flags    = extraCFlags aarch64_tools
 
 -- ARM thumb (e.g. -M profile) toolchain
 thumb_gnu_tool = findTool (toolPath thumb_tools) (toolPrefix thumb_tools)

@@ -198,7 +198,11 @@ else
             -device virtio-blk-pci,drive=image \
             -drive if=none,id=image,file=$IMAGE,format=raw"
 fi
-GDB=gdb-multiarch
+
+case "$(uname)" in
+    Darwin) GDB=aarch64-none-elf-gdb    ;;
+    *)      GDB=gdb-multiarch           ;;
+esac
 QEMU_NONDEBUG=-nographic
 EFI=1
 

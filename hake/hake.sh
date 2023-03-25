@@ -18,10 +18,18 @@ CACHEDIR="$HOME/.cache/barrelfish"
 HAGFISH_LOCATION="/home/netos/tftpboot/Hagfish.efi"
 DEFAULT_OPT_FLAGS="-O2 -g"
 
+case "$(uname)" in
+    Darwin)
+        AARCH64_TOOLSPEC="Just Tools.arm_system_aarch64_macos"
+        ;;
+    *)
+        AARCH64_TOOLSPEC=Nothing
+        ;;
+esac
+
 # Don't override the default toolchain unless asked to.
 TOOLROOT=Nothing
 ARM_TOOLSPEC=Nothing
-AARCH64_TOOLSPEC=Nothing
 THUMB_TOOLSPEC=Nothing
 ARMEB_TOOLSPEC=Nothing
 X86_TOOLSPEC=Nothing

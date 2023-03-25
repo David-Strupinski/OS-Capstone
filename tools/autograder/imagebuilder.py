@@ -312,13 +312,20 @@ class AbstractImageBuilder :
     def _run_bash(self, args: Sequence[str]):
         self._run_cmd("bash", args)
 
+    def _triple(self):
+        from sys import platform
+        if platform == 'darwin':
+            return 'aarch64-none-elf'
+        else:
+            return 'aarch64-linux-gnu'
+
     # runs objcopy
     def _run_objcopy(self, args: Sequence[str]):
-        self._run_cmd("aarch64-linux-gnu-objcopy", args)
+        self._run_cmd(f"{self._triple()}-objcopy", args)
 
     # runs ld
     def _run_ld(self, args: Sequence[str]):
-        self._run_cmd("aarch64-linux-gnu-ld", args)
+        self._run_cmd(f"{self._triple()}-ld", args)
 
     # runs a python script
     def _run_python(self, args: Sequence[str]):
@@ -359,7 +366,7 @@ class ImageBuilderDocker(AbstractImageBuilder):
     def _run_cmd(self, cmd : str, args: Sequence[str]):
         self._print_cmd(str(cmd), args)
         dockerscript = self._sourcepath / "tools" / "bfdocker.sh"
-        args = [str(dockerscript)] + [cmd] + args
+        args = [str(dockerscript)] + ["--no-interactive"] + [cmd] + args
         try :
             logverbose("Executing: bash " + " ".join(args))
             res = bash(*args)

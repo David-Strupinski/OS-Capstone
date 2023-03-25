@@ -12,7 +12,6 @@ The code in this repository is a simplified version of the [Barrelfish OS](barre
 
 see the LICENSE file.
 
-
 ## Pulling Code in your Repository
 
 Make sure you are on the right branch and add the code handout repository as a new git remote.
@@ -27,21 +26,19 @@ $ git pull handout main
 
 You can use `git remote -v` to list the remotes.
 
-
 ## Dependencies
 
 Before you can start, make sure you have installed the following dependencies:
 
 ```
-# apt-get install build-essential bison flex ghc libghc-src-exts-dev \
+# apt-get install build-essential pkg-config bison flex ghc libghc-src-exts-dev \
                 libghc-ghc-paths-dev libghc-parsec3-dev libghc-random-dev \
-                libghc-ghc-mtl-dev libghc-async-dev  cabal-install freebsd-glue \
-                libelf-freebsd-dev git gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+                libghc-ghc-mtl-dev libghc-async-dev  cabal-install libelf-dev \
+                git gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-cabal v1-update
-cabal v1-install bytestring-trie
+# cabal v1-update
+# cabal v1-install bytestring-trie
 ```
-
 
 **Booting in Qemu**
 
@@ -59,8 +56,8 @@ cabal v1-install bytestring-trie
 ```
 # apt-get install picocom wget python3
 
-wget -P $HOME/bin https://github.com/NXPmicro/mfgtools/releases/download/uuu_1.4.165/uuu
-chmod 755 $HOME/bin/uuu
+# wget -P $HOME/bin https://github.com/NXPmicro/mfgtools/releases/download/uuu_1.4.165/uuu
+# chmod 755 $HOME/bin/uuu
 ```
 
 **Autograder**

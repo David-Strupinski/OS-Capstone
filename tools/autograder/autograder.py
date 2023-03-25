@@ -136,6 +136,7 @@ if __name__ == '__main__':
         else :
             testrunner = TestRunnerQemu(imgbuilder, TESTS_DIRECTORY, args.tests)
     else:
+        print(args.config)
         try :
             if args.config == "ethz-remote":
                 boardctrl = BoardCtrlRemoteETHZ(args.board)
@@ -145,6 +146,8 @@ if __name__ == '__main__':
                 boardctrl = BoardCtrlRemoteUBC(args.board)
             elif args.config == "uw":
                 boardctrl = BoardCtrlLocalUW(ROOT_DIRECTORY, args.buildpath)
+            elif args.config == "local-auto":
+                boardctrl = BoardCtrlLocalAutoReset(ROOT_DIRECTORY, args.board, args.serial)
             else :
                 boardctrl = BoardCtrlLocalDefault(ROOT_DIRECTORY, args.board, args.serial)
         except Exception as e:

@@ -769,6 +769,24 @@ errval_t vnode_create(struct capref dest, enum objtype type)
     return SYS_ERR_OK;
 }
 
+/**
+ * \brief Create a VNode cap in a newly allocated slot.
+ *
+ * \param dest  Pointer to capref struct, filld-in with location of new cap.
+ *
+ * The caller is responsible for revoking the cap after using it.
+ */
+errval_t vnode_alloc(struct capref *dest, enum objtype type)
+{
+    errval_t err = slot_alloc(dest);
+
+    if (err_is_fail(err)) {
+        return err_push(err, LIB_ERR_SLOT_ALLOC);
+    }
+
+    return vnode_create(*dest, type);
+}
+
 
 /**
  * \brief Create a dispatcher capability and store it in the slot pointed to

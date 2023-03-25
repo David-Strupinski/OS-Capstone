@@ -15,8 +15,8 @@ let arch = "armv8"
 in [
     compileNativeC "armv8_bootimage"
         ["armv8_bootimage.c"]
-        ["-std=gnu99", "-g", "-I/usr/include/freebsd"]
-        ["-lelf-freebsd"]
+        ["-std=gnu99", "-g", "$(shell pkg-config libelf --cflags)"]
+        ["$(shell pkg-config libelf --libs)"]
         ["grubmenu"],
     compileCFile opts "efi_loader.c"
 ]

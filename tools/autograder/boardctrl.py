@@ -10,6 +10,7 @@
 # for type annotations
 from __future__ import annotations
 
+import os
 import time
 import pathlib
 import pexpect
@@ -287,10 +288,10 @@ class AbstractLocalBoardController(AbstractBoardController):
             logverbose(f"Executing: {str(cmd)} " + " ".join(args))
             res = l_cmd(*args)
         except ProcessExecutionError as e:
-            logerr(f"failure while executing the remote command: {e}")
+            logerr(f"failure while executing the local command: {e}")
             raise e
         except Exception as e:
-            logerr(f"unknown failure while executing the remote command")
+            logerr(f"unknown failure while executing the local command")
             raise e
         return res
 
@@ -333,14 +334,14 @@ class AbstractLocalBoardController(AbstractBoardController):
             raise e
         return con
 
-    # resets the board (power cycle) through manually pressing the button
+    # Tries to resets the board (power cycle) through manually pressing the button
     def board_reset(self):
-        _ = input("-----> (reset the board using the physical button, then press any key)")
+        _ = input("-----> (reset the board using the physical button, then press enter)")
 
     # boots barrelfish on the board
     def boot_barrelfish(self, image : pathlib.Path):
         loginfo(f"Booting Barrelfish on local board {self._board} with image {str(image)}...")
-        cmd = self._bootcmd_barrelfish_cmd(self._remoteimg)
+        cmd = self._bootcmd_barrelfish_cmd(image)
         if cmd == None:
             raise Exception("No Barrelfish boot command for this configuration.")
         self._exec_local_command(cmd)
@@ -354,6 +355,50 @@ class AbstractLocalBoardController(AbstractBoardController):
         self._exec_remote_command(cmd)
 
 
+#########################################################################################
+# Local Board Control (Single Board Connected)
+#########################################################################################
+
+
+
+CFG_SITE_CONFIGS += ["local", "local-auto"]
+
+# Board Control for local board access
+class BoardCtrlLocalDefault(AbstractLocalBoardController):
+    def __init__(self, bfroot, board=None, serial='/dev/ttyUSB0'):
+        super().__init__(board, serial)
+        self._bfroot = pathlib.Path(bfroot)
+
+    # returns the command for obtaining the console to the board as a list of strings
+    # needs to be implemented by the subclass
+    def _console_cmd(self) :
+        return ["picocom", "-b", "115200",  "-f", "n", self._serial]
+
+    # returns the command for booting barrelfish on the  board as a list of strings
+    # needs to be implemented by the subclass
+    def _bootcmd_barrelfish_cmd(self, img : pathlib.Path) :
+        scriptpath = self._bfroot / "tools" / "imx8x" / "bf-boot.sh"
+        cmd = [str(scriptpath), "--no-reset", "--bf", str(img)]
+        if self._board != None :
+            logwarn(f"Board {self._board} specified. Multiple local boards are not supported, expect badness.")
+        return cmd
+
+    # returns the command for booting Linux on the  board as a list of strings
+    # needs to be implemented by the subclass
+    def _bootcmd_linux_cmd(self) :
+        scriptpath = self._bfroot / "tools" / "imx8x" /" local-boot.sh"
+        cmd = [scriptpath, "--no-reset"]
+        if self._board != None :
+            logwarn(f"Board {self._board} specified. Multiple local boards are not supported, expect badness.")
+        return cmd
+
+
+# Board Control for local board access with USB reset
+class BoardCtrlLocalAutoReset(BoardCtrlLocalDefault):
+    def board_reset(self) :
+        scriptpath = self._bfroot / "tools" / "imx8x" / "board_ctrl.py"
+        self._exec_local_command([str(scriptpath), "reset"])
+
 
 #########################################################################################
 # ETH Zurich Specific Configurations
@@ -366,14 +411,17 @@ CFG_SITE_CONFIGS += ["ethz-remote", "ethz-local"]
 # Board controller for remotely accessing boards attached to emmentaler
 class BoardCtrlRemoteETHZ(AbstractRemoteBoardController):
     def __init__(self, board):
-        # the possible boards are colibri{1..6}
-        boards = [f"colibri{i}" for i in range(1, 6)]
+        # the possible boards are colibri{3..5}
+        boards = [f"colibri{i}" for i in range(3, 6)]
+        self._remote = None
         if board == None :
             raise ValueError(f"No board specified! Please specify a board from {boards}")
         if not board in boards :
             raise ValueError(f"Unknown board identifier: '{board}', available boards: {boards}")
 
-        super().__init__(board, "emmentaler.ethz.ch", port = 8006)
+        super().__init__(board, "emmentaler.ethz.ch", port = 8006,
+            remotepath = pathlib.PurePosixPath("/mnt") / "netos" / "tftpboot" / os.getlogin()
+        )
 
     # returns the command for obtaining the console to the board as a list of strings
     # needs to be implemented by the subclass
@@ -383,12 +431,12 @@ class BoardCtrlRemoteETHZ(AbstractRemoteBoardController):
     # returns the command for booting barrelfish on the  board as a list of strings
     # needs to be implemented by the subclass
     def _bootcmd_barrelfish_cmd(self, img : pathlib.Path) :
-        return ["bash", "/home/netos/tools/bin/rackboot.sh", "-b", self._board, str(img)]
+        return ["bash", "/mnt/netos/tools/bin/rackboot.sh", "-b", self._board]
 
     # returns the command for booting Linux on the  board as a list of strings
     # needs to be implemented by the subclass
     def _bootcmd_linux_cmd(self) :
-        return ["bash", "/home/netos/tools/bin/rackboot.sh", "-l", self._board]
+        return ["bash", "/mnt/netos/tools/bin/rackboot.sh", "-l", self._board]
 
     # returns the command for resetting the board as a list of strings
     # needs to be implemented by the subclass,
@@ -408,7 +456,7 @@ class BoardCtrlRemoteETHZ(AbstractRemoteBoardController):
 # Board Control for local board access at ETHZ (on emmentaler)
 class BoardCtrlLocalETHZ(AbstractLocalBoardController):
     def __init__(self, board):
-        boards = [f"colibri{i}" for i in range(1, 5)]
+        boards = [f"colibri{i}" for i in range(3, 6)]
         if not board in boards :
             logerr(f"Invalid board {board}. Valid boards are {boards}")
             raise ValueError(f"Invalid board {board}")
@@ -422,15 +470,15 @@ class BoardCtrlLocalETHZ(AbstractLocalBoardController):
     # returns the command for booting barrelfish on the  board as a list of strings
     # needs to be implemented by the subclass
     def _bootcmd_barrelfish_cmd(self, img : pathlib.Path) :
-        return ["bash", "/home/netos/tools/bin/rackboot.sh", "-b", self._board, str(img)]
+        return ["bash", "/mnt/netos/tools/bin/rackboot.sh", "-b", self._board, str(img)]
 
     # returns the command for booting Linux on the  board as a list of strings
     # needs to be implemented by the subclass
     def _bootcmd_linux_cmd(self) :
-        return ["bash", "/home/netos/tools/bin/rackboot.sh", "-l", self._board]
+        return ["bash", "/mnt/netos/tools/bin/rackboot.sh", "-h", self._board]
 
     # resets the board (power cycle)
-    def board_reset(self):
+    def board_reset(self) :
         self._exec_local_command(["rackpower", "-r", self._board])
 
 
@@ -443,7 +491,7 @@ class BoardCtrlLocalETHZ(AbstractLocalBoardController):
 
 CFG_SITE_CONFIGS += ["ubc"]
 
-# BoardCtrluration for remote board access for UBC
+# Board Control for remote board access for UBC
 class BoardCtrlRemoteUBC(AbstractRemoteBoardController):
     def __init__(self, board):
         boards = [f"colibri{i}" for i in range(1, 21)]
@@ -540,4 +588,3 @@ class BoardCtrlLocalDefault(AbstractLocalBoardController):
             cmd.append("--board")
             cmd.append(self._board)
         return cmd
-

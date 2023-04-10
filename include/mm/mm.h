@@ -37,13 +37,24 @@ typedef errval_t (*slot_alloc_refill_fn_t)(struct slot_allocator *ca);
  * them to allocate its memory, we declare it in the public header.
  */
 struct mm {
-    struct slot_allocator *ca;       ///< Slot allocator used for allocating nodes
-    slot_alloc_refill_fn_t refill;   ///< Function to refill the slot allocator
-    enum objtype           objtype;  ///< Type of capabilities stored
     // TODO: add your own fields here to track the use of memory etc.
+    struct slot_allocator *ca;      ///< Slot allocator used for allocating nodes
+    slot_alloc_refill_fn_t refill;  ///< Function to refill the slot allocator
+    struct slab_allocator ma;       ///< Slab allocator for metadata
+    char slab_buf[512];             // TODO: dynamically allocate a buffer 
+    struct metadata *root;          ///< Pointer to metadata linked list root
+    enum objtype objtype;           ///< Type of capabilities stored
+    size_t free_mem;                ///< Bytes of free memory
+    size_t total_mem;               ///< Total number of bytes managed
 };
 
-
+/**
+ *@brief Linked list element for capability linked list
+ */
+struct metadata {
+    struct metadata *next;
+    struct capref data;
+};
 
 /**
  * @brief initializes the memory manager instance

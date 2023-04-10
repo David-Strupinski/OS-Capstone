@@ -36,18 +36,22 @@
 errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
                  slot_alloc_refill_fn_t refill, void *slab_buf, size_t slab_sz)
 {
-    // make compiler happy about unused parameters
-    (void)mm;
-    (void)objtype;
-    (void)ca;
-    (void)refill;
+    // initialize mm instance
+    mm->objtype = objtype;
+    mm->ca = ca;
+    mm->refill = refill;
+
+    // TODO: use these parameters
     (void)slab_buf;
     (void)slab_sz;
 
-    // TODO: initialize the mm instance
-
-    UNIMPLEMENTED();
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // initialize the slab allocator that holds the metadata
+    // TODO: change this to be dynamically allocated
+    slab_init(&mm->ma, sizeof(struct metadata), NULL);
+    slab_grow(&mm->ma, mm->slab_buf, 512);
+    mm->objtype = objtype;
+    
+    return SYS_ERR_OK;
 }
 
 
@@ -85,7 +89,7 @@ errval_t mm_destroy(struct mm *mm)
  *  - @retval MM_ERR_CAP_INVALID      if the supplied capability is invalid (size, alignment)
  *  - @retval MM_ERR_CAP_TYPE         if the supplied capability is not of the expected type
  *  - @retval MM_ERR_ALREADY_PRESENT  if the supplied memory is already managed by this allocator
- *  - @retval MM_ERR_SLAB_ALLOC_FAIL  if the memory for the new node's meta data could not be allocate
+ *  - @retval MM_ERR_SLAB_ALLOC_FAIL  if the memory for the new node's meta data could not be allocated
  *
  * @note: the memory manager instance must be initialized before calling this function.
  *
@@ -95,12 +99,49 @@ errval_t mm_destroy(struct mm *mm)
  */
 errval_t mm_add(struct mm *mm, struct capref cap)
 {
+    errval_t err;
+
+    // get the capability and check error
+    struct capability capability;
+    err = cap_direct_identify(cap, &capability);
+    if (err_is_fail(err)) {
+        return err_push(err, LIB_ERR_CAP_IDENTIFY);
+    }
+    
+    // check for invalid input
+    // TODO: read error codes and see if there are any checks we are missing
+    if (capability.type != ObjType_RAM) {
+        // not a RAM capability
+        return MM_ERR_CAP_TYPE;
+    }
+    if (capability.u.ram.bytes <= 0 || capability.u.ram.base % BASE_PAGE_SIZE != 0) {
+        // RAM doesn't exist or is not aligned to page boundary
+        return MM_ERR_CAP_INVALID;
+    }
+
+    // TODO: walk the metadata and see if the memory is already managed, 
+    // returning MM_ERR_ALREADY_PRESENT if so
+    
     // make compiler happy about unused parameters
-    (void)mm;
     (void)cap;
 
-    UNIMPLEMENTED();
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // allocate a slab for metadata
+    struct metadata *cap_metadata = slab_alloc(&(mm->ma));
+    if (cap_metadata == NULL) {
+        return MM_ERR_SLAB_ALLOC_FAIL;
+    }
+
+    // TODO: perhaps sort and coalesce neighboring capabilities
+    // enqueue the new metadata
+    cap_metadata->data = cap;
+    cap_metadata->next = mm->root;
+    mm->root = cap_metadata;
+    
+    // update the free and total memory
+    mm->free_mem += capability.u.ram.bytes;
+    mm->total_mem += capability.u.ram.bytes;
+
+    return SYS_ERR_OK;
 }
 
 
@@ -134,8 +175,20 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
     (void)size;
     (void)retcap;
 
-    UNIMPLEMENTED();
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // check alignment input value
+    // TODO: test this code
+    size_t align_checker = alignment;
+    while (true) {
+        if (align_checker == BASE_PAGE_SIZE) {
+            break;
+        }
+        if (align_checker % 2 != 0 || align_checker < BASE_PAGE_SIZE) {
+            return MM_ERR_BAD_ALIGNMENT;
+        }
+        align_checker /= 2;
+    }
+    
+    return SYS_ERR_OK;
 }
 
 
@@ -211,7 +264,7 @@ errval_t mm_free(struct mm *mm, struct capref cap)
     (void)cap;
 
     // TODO:
-    //   - add the memory back to the allocator by markint the region as free
+    //   - add the memory back to the allocator by marking the region as free
     //
     // You can assume that the capability was the one returned by a previous call
     // to mm_alloc() or mm_alloc_aligned(). For the extra challenge, you may also
@@ -232,11 +285,7 @@ errval_t mm_free(struct mm *mm, struct capref cap)
  */
 size_t mm_mem_available(struct mm *mm)
 {
-    // make compiler happy about unused parameters
-    (void)mm;
-
-    UNIMPLEMENTED();
-    return 0;
+    return mm->free_mem;
 }
 
 
@@ -249,11 +298,7 @@ size_t mm_mem_available(struct mm *mm)
  */
 size_t mm_mem_total(struct mm *mm)
 {
-    // make compiler happy about unused parameters
-    (void)mm;
-
-    UNIMPLEMENTED();
-    return 0;
+    return mm->total_mem;
 }
 
 

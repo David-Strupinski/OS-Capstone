@@ -26,7 +26,6 @@
 __BEGIN_DECLS
 
 
-
 /// type of the slot allocator refill function
 typedef errval_t (*slot_alloc_refill_fn_t)(struct slot_allocator *ca);
 
@@ -42,6 +41,8 @@ struct metadata {
     bool used;
 };
 
+#define NumStructAlloc 1024
+
 /**
  * @brief Memory manager instance data
  *
@@ -53,13 +54,13 @@ struct mm {
     struct slot_allocator *ca;      ///< Slot allocator used for allocating nodes
     slot_alloc_refill_fn_t refill;  ///< Function to refill the slot allocator
     struct slab_allocator ma;       ///< Slab allocator for metadata
-    char slab_buf[SLAB_STATIC_SIZE(64, sizeof(struct metadata))];             // TODO: dynamically allocate a buffer 
+    char slab_buf[SLAB_STATIC_SIZE(NumStructAlloc, sizeof(struct metadata))];             // TODO: dynamically allocate a buffer 
     struct metadata *root;          ///< Pointer to metadata linked list root
     struct metadata *freelist;
     enum objtype objtype;           ///< Type of capabilities stored
     size_t free_mem;                ///< Bytes of free memory
     size_t total_mem;               ///< Total number of bytes managed
-    bool currentlyRefillingSA;      ///< Bool to tell whether we are currently refilling the slot allocator
+    //bool currentlyRefillingSA;      ///< Bool to tell whether we are currently refilling the slot allocator
 };
 
 

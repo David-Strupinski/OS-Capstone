@@ -45,7 +45,6 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     mm->refill = refill;
     mm->free_mem = 0;
     mm->total_mem = 0;
-    mm->currentlyRefillingSA = false;
 
     // TODO: use these parameters
     (void)slab_buf;
@@ -55,7 +54,7 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     // initialize the slab allocator that holds the metadata
     // TODO: change this to be dynamically allocated
     slab_init(&mm->ma, sizeof(struct metadata), NULL);
-    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(64, sizeof(struct metadata)));
+    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(NumStructAlloc, sizeof(struct metadata)));
     
     return SYS_ERR_OK;
 }

@@ -204,6 +204,11 @@ errval_t mm_add(struct mm *mm, struct capref cap)
  */
 errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct capref *retcap)
 {
+    size_t aligned_size = size;
+    if (aligned_size % alignment!= 0) {
+        aligned_size = aligned_size + alignment - (aligned_size%alignment);
+    }
+
     // check alignment input value
     if (alignment < BASE_PAGE_SIZE) {
         return MM_ERR_BAD_ALIGNMENT;
@@ -213,7 +218,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
         return MM_ERR_BAD_ALIGNMENT;
     }
 
-    if (mm->free_mem < size || mm->free_mem < BASE_PAGE_SIZE) {
+    if (mm->free_mem < aligned_size || mm->free_mem < BASE_PAGE_SIZE) {
         return MM_ERR_OUT_OF_MEMORY;
     }
 
@@ -234,8 +239,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
         genpaddr_t potential_base = curr->base + alignment_offset; 
         size_t potential_size = curr->size - alignment_offset;
         if (curr->used == false) {
-            
-            if (potential_size >= size && potential_size >= BASE_PAGE_SIZE) {
+            if (potential_size >= aligned_size && potential_size >= BASE_PAGE_SIZE) {
                 if (alignment_offset > 0) {
                     struct metadata *splitOff = slab_alloc(&(mm->ma));
                     if (splitOff == NULL) {
@@ -260,21 +264,21 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
                     curr->size = curr->size - alignment_offset;
                     curr->base = potential_base;
                 } 
-                if (curr->size > size) {
+                if (curr->size > aligned_size) {
                     struct metadata *splitOff = slab_alloc(&(mm->ma));
                     if (splitOff == NULL) {
                         debug_printf("splitOff is null (end)\n");
                         return MM_ERR_SLAB_ALLOC_FAIL;
                     }
-                    splitOff->size = curr->size - size;
-                    splitOff->base = curr->base + size;
+                    splitOff->size = curr->size - aligned_size;
+                    splitOff->base = curr->base + aligned_size;
                     splitOff->capability_base = curr->capability_base;
                     splitOff->data = curr->data;
                     splitOff->used = false;
                     splitOff->next = curr->next;
                     
                     curr->next = splitOff;
-                    curr->size = size;
+                    curr->size = aligned_size;
                 }
                 
                 
@@ -285,12 +289,11 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
                 }
                 slot_prealloc_alloc(toPass, retcap);
                 
-                size_t aligned_size = curr->base - curr->capability_base;
-                if (aligned_size % alignment!= 0) {
-                    aligned_size = aligned_size + alignment - (aligned_size%alignment);
+                gensize_t aligned_offset = curr->base - curr->capability_base;
+                if (aligned_offset % alignment!= 0) {
+                   aligned_offset = aligned_offset + alignment - (aligned_offset % alignment);
                 }
-
-                cap_retype(*retcap, (curr->data), aligned_size, ObjType_RAM, size);
+                cap_retype(*retcap, (curr->data), aligned_offset, ObjType_RAM, aligned_size);
 
                 curr->used = true;
                 return SYS_ERR_OK;

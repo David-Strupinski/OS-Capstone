@@ -204,10 +204,11 @@ errval_t mm_add(struct mm *mm, struct capref cap)
  */
 errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct capref *retcap)
 {
-    size_t aligned_size = size;
+    /*size_t aligned_size = size;
     if (aligned_size % alignment!= 0) {
         aligned_size = aligned_size + alignment - (aligned_size%alignment);
-    }
+    }*/
+    size_t aligned_size = ROUND_UP(size, alignment);
 
     // check alignment input value
     if (alignment < BASE_PAGE_SIZE) {

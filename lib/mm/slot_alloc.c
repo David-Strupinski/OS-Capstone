@@ -65,6 +65,7 @@ errval_t slot_prealloc_refill(struct slot_prealloc *this)
 
     this->is_refilling = true;
 
+
     /*
      * explicitly allocate RAM for the next CNode, as we need to control the
      * allocation of a slot in the L1 CNode.

@@ -33,10 +33,12 @@ struct slab_head {
 
 struct slot_allocator;
 
+// TODO: fix our attrocious hacky solution to passing the mm into slab_refill_no_pagefault
 struct slab_allocator {
     struct slab_head *slabs;    ///< Pointer to list of slabs
     size_t blocksize;           ///< Size of blocks managed by this allocator
     slab_refill_func_t refill_func;  ///< Refill function
+    struct mm * mem_manager;             ///< this really should have a better solution
 };
 
 void slab_init(struct slab_allocator *slabs, size_t blocksize,

@@ -99,7 +99,11 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     //  -  Implement page fault handler that installs frames when a page fault
     //     occurs and keeps track of the virtual address space.
     st->current_vaddr = start_vaddr;
-    return LIB_ERR_NOT_IMPLEMENTED;
+    
+    // we added this
+    st->slot_alloc = ca;
+    
+    return SYS_ERR_OK;
 }
 
 

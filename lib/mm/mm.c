@@ -45,6 +45,7 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     mm->refill = refill;
     mm->free_mem = 0;
     mm->total_mem = 0;
+    mm->currentlyRefillingSA = false;
 
     // TODO: use these parameters
     (void)slab_buf;
@@ -54,7 +55,7 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     // initialize the slab allocator that holds the metadata
     // TODO: change this to be dynamically allocated
     slab_init(&mm->ma, sizeof(struct metadata), NULL);
-    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(1024, sizeof(struct metadata)));
+    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(64, sizeof(struct metadata)));
     
     return SYS_ERR_OK;
 }
@@ -241,6 +242,14 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
         if (curr->used == false) {
             if (potential_size >= aligned_size && potential_size >= BASE_PAGE_SIZE) {
                 if (alignment_offset > 0) {
+                    if (slab_freecount(&(mm->ma)) < 16) { //!mm->currentlyRefillingSA) {
+                        printf("less than 16 available\n");
+                        //mm->currentlyRefillingSA = true;
+                        //mm->ma.mem_manager = mm;
+                        slab_default_refill(&(mm->ma));
+                        //mm->ma.mem_manager = NULL;
+                        //mm->currentlyRefillingSA = false;
+                    }
                     struct metadata *splitOff = slab_alloc(&(mm->ma));
                     if (splitOff == NULL) {
                         debug_printf("splitOff is null (begin)\n");
@@ -265,6 +274,14 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
                     curr->base = potential_base;
                 } 
                 if (curr->size > aligned_size) {
+                    if (slab_freecount(&(mm->ma)) < 16) {//&& !mm->currentlyRefillingSA) {
+                        printf("less than 16 available\n");
+                        //mm->currentlyRefillingSA = true;
+                        //mm->ma.mem_manager = mm;
+                        slab_default_refill(&(mm->ma));
+                        //mm->ma.mem_manager = NULL;
+                        //mm->currentlyRefillingSA = false;
+                    }
                     struct metadata *splitOff = slab_alloc(&(mm->ma));
                     if (splitOff == NULL) {
                         debug_printf("splitOff is null (end)\n");

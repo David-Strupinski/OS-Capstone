@@ -18,6 +18,7 @@
 #include <aos/aos.h>
 #include <aos/slab.h>
 #include <aos/static_assert.h>
+#include <mm/mm.h>
 
 struct block_head {
     struct block_head *next;///< Pointer to next block in free list
@@ -214,7 +215,11 @@ errval_t slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref fr
     (void)minbytes;
 
     // TODO: Refill the slot allocator without causing a page-fault
-    return LIB_ERR_NOT_IMPLEMENTED;
+    /*errval_t err = mm_alloc_aligned(slabs->mem_manager, minbytes, BASE_PAGE_SIZE, &frame_slot);
+    if (err_is_fail(err)) {
+        return err;
+    }*/
+    return SYS_ERR_NOT_IMPLEMENTED;
 }
 
 /**

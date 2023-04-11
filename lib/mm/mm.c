@@ -234,10 +234,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
         genpaddr_t potential_base = curr->base + alignment_offset; 
         size_t potential_size = curr->size - alignment_offset;
         if (curr->used == false) {
-            size_t aligned_size = curr->base - curr->capability_base;
-            if (aligned_size % alignment!= 0) {
-                aligned_size = aligned_size + alignment - (aligned_size%alignment);
-            }
+            
             if (potential_size >= size && potential_size >= BASE_PAGE_SIZE) {
                 if (alignment_offset > 0) {
                     struct metadata *splitOff = slab_alloc(&(mm->ma));
@@ -288,6 +285,11 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
                 }
                 slot_prealloc_alloc(toPass, retcap);
                 
+                size_t aligned_size = curr->base - curr->capability_base;
+                if (aligned_size % alignment!= 0) {
+                    aligned_size = aligned_size + alignment - (aligned_size%alignment);
+                }
+
                 cap_retype(*retcap, (curr->data), aligned_size, ObjType_RAM, size);
 
                 curr->used = true;

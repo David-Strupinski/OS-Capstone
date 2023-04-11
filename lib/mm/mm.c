@@ -388,12 +388,6 @@ errval_t mm_alloc_from_range_aligned(struct mm *mm, size_t base, size_t limit, s
  */
 errval_t mm_free(struct mm *mm, struct capref cap)
 {
-    // make compiler happy about unused parameters
-    (void)mm;
-    (void)cap;
-    // for (int i = 0; i < 100; i++) {
-    //     debug_printf("made it to start of mm_free\n");
-    // }
     // TODO:
     //   - add the memory back to the allocator by marking the region as free
     //
@@ -402,8 +396,60 @@ errval_t mm_free(struct mm *mm, struct capref cap)
     // need to handle partial frees, where a capability was split up by the client
     // and only a part of it was returned.
 
-    UNIMPLEMENTED();
-    return LIB_ERR_NOT_IMPLEMENTED;
+    struct capability capability;
+    errval_t err = cap_direct_identify(cap, &capability);
+    if (err_is_fail(err)) {
+        return err_push(err, LIB_ERR_CAP_IDENTIFY);
+    }
+
+    // The capability is not a RAM capability
+    if (capability.type != ObjType_RAM) {
+        printf("we got a non ram capability\n");
+        return MM_ERR_CAP_TYPE;
+    }
+
+    // The supplied capability was invalid or does not exist.
+    if (capability.u.ram.bytes <= 0 || capability.u.ram.base % BASE_PAGE_SIZE != 0) {
+        printf("RAM doesn't exist or is not aligned to page boundary\n");
+        return MM_ERR_CAP_INVALID;
+    } 
+
+    // The (parts of) memory region has already been freed
+    struct metadata* curr = mm->freelist;
+    while (curr != NULL) {
+        if (0) /* check equality of capref*/ {
+            return MM_ERR_DOUBLE_FREE;
+        } 
+        curr = curr->next;
+    }
+
+    // The memory was not allocated by this allocator
+    struct metadata* prev = NULL; 
+    struct metadata* curr = mm->root;
+    found = false;
+    while (curr != NULL && !found) {
+        if (0) /* check equality of capref*/ {
+            found = true;
+        } else {
+            prev = curr;
+            curr = curr->next;
+        }
+    }
+    if (!found) return MM_ERR_NOT_FOUND; 
+
+    // Deallocate the slot
+    struct slot_allocator * sa = mm->ca;
+    slot_prealloc_free((struct slot_prealloc *) sa, cap);
+
+    // Remove from active list
+    if (prev != NULL) prev->next = curr->next;
+
+    // Add to free list
+    struct metadata* l = mm->freelist;
+    mm->freelist = curr;
+    curr->next = l;
+
+    return SYS_ERR_OK;
 }
 
 

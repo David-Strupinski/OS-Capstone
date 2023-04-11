@@ -36,20 +36,25 @@
 errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
                  slot_alloc_refill_fn_t refill, void *slab_buf, size_t slab_sz)
 {
+    // for (int i = 0; i < 100; i++) {
+    // debug_printf("made it to start of mm_init\n");
+    // }
     // initialize mm instance
     mm->objtype = objtype;
     mm->ca = ca;
     mm->refill = refill;
+    mm->free_mem = 0;
+    mm->total_mem = 0;
 
     // TODO: use these parameters
     (void)slab_buf;
     (void)slab_sz;
-
+    
+    
     // initialize the slab allocator that holds the metadata
     // TODO: change this to be dynamically allocated
     slab_init(&mm->ma, sizeof(struct metadata), NULL);
-    slab_grow(&mm->ma, mm->slab_buf, 512);
-    mm->objtype = objtype;
+    slab_grow(&mm->ma, mm->slab_buf, 2048);
     
     return SYS_ERR_OK;
 }
@@ -70,6 +75,9 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
  */
 errval_t mm_destroy(struct mm *mm)
 {
+    // for (int i = 0; i < 100; i++) {
+    // debug_printf("made it to start of mm_destroy\n");
+    // }
     // make the compiler happy
     (void)mm;
 
@@ -100,7 +108,9 @@ errval_t mm_destroy(struct mm *mm)
 errval_t mm_add(struct mm *mm, struct capref cap)
 {
     errval_t err;
-
+// for (int i = 0; i < 100; i++) {
+//     debug_printf("made it to start of mm_add\n");
+//     }
     // get the capability and check error
     struct capability capability;
     err = cap_direct_identify(cap, &capability);
@@ -112,18 +122,28 @@ errval_t mm_add(struct mm *mm, struct capref cap)
     // TODO: read error codes and see if there are any checks we are missing
     if (capability.type != ObjType_RAM) {
         // not a RAM capability
+        printf("we got a non ram capability\n");
         return MM_ERR_CAP_TYPE;
     }
     if (capability.u.ram.bytes <= 0 || capability.u.ram.base % BASE_PAGE_SIZE != 0) {
-        // RAM doesn't exist or is not aligned to page boundary
+        printf("RAM doesn't exist or is not aligned to page boundary\n");
         return MM_ERR_CAP_INVALID;
     }
-
-    // TODO: walk the metadata and see if the memory is already managed, 
-    // returning MM_ERR_ALREADY_PRESENT if so
     
-    // make compiler happy about unused parameters
-    (void)cap;
+    // walk the metadata and see if the memory is already managed, 
+    // returning MM_ERR_ALREADY_PRESENT if so
+    struct metadata *curr = mm->root;
+    while (curr != NULL) {
+        struct capability curr_cap;
+        err = cap_direct_identify(curr->data, &curr_cap);
+        if (err_is_fail(err)){
+            return err_push(err, LIB_ERR_CAP_IDENTIFY);
+        }
+        if (curr_cap.u.ram.base == capability.u.ram.base) {
+            return MM_ERR_ALREADY_PRESENT;
+        }
+        curr = curr->next;
+    }
 
     // allocate a slab for metadata
     struct metadata *cap_metadata = slab_alloc(&(mm->ma));
@@ -131,12 +151,25 @@ errval_t mm_add(struct mm *mm, struct capref cap)
         return MM_ERR_SLAB_ALLOC_FAIL;
     }
 
+    struct metadata *freeListRoot = slab_alloc(&(mm->ma));    
+
     // TODO: perhaps sort and coalesce neighboring capabilities
     // enqueue the new metadata
     cap_metadata->data = cap;
     cap_metadata->next = mm->root;
     mm->root = cap_metadata;
-    
+    cap_metadata->base = capability.u.ram.base;
+    cap_metadata->size = capability.u.ram.bytes;
+    cap_metadata->used = false;
+
+    // add the new capability to the free list
+    freeListRoot->next = mm->freelist;
+    mm->freelist = freeListRoot;
+    freeListRoot->data = cap;
+    freeListRoot->base = capability.u.ram.base;
+    freeListRoot->size = capability.u.ram.bytes;
+    freeListRoot->used = false;
+
     // update the free and total memory
     mm->free_mem += capability.u.ram.bytes;
     mm->total_mem += capability.u.ram.bytes;
@@ -169,6 +202,9 @@ errval_t mm_add(struct mm *mm, struct capref cap)
  */
 errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct capref *retcap)
 {
+    // for (int i = 0; i < 100; i++) {
+    // debug_printf("made it to start of mm_alloc_aligned\n");
+    // }
     // make compiler happy about unused parameters
     (void)mm;
     (void)alignment;
@@ -177,18 +213,91 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
 
     // check alignment input value
     // TODO: test this code
-    size_t align_checker = alignment;
-    while (true) {
-        if (align_checker == BASE_PAGE_SIZE) {
-            break;
-        }
-        if (align_checker % 2 != 0 || align_checker < BASE_PAGE_SIZE) {
-            return MM_ERR_BAD_ALIGNMENT;
-        }
-        align_checker /= 2;
+
+    if (alignment < BASE_PAGE_SIZE) {
+        return MM_ERR_BAD_ALIGNMENT;
     }
+
+    if ((alignment & (alignment - 1)) != 0) {
+        return MM_ERR_BAD_ALIGNMENT;
+    }
+
+    if (mm->free_mem < size || mm->free_mem < BASE_PAGE_SIZE) {
+        return MM_ERR_OUT_OF_MEMORY;
+    }
+
+    // traverse list looking for space
+
+    if (mm->root == NULL) {
+        return MM_ERR_ALLOC_CONSTRAINTS;
+    }
+
+    struct metadata * curr = mm->freelist;
+    struct metadata * prev = mm->freelist;
+    while (curr != NULL) {
+        size_t alignment_offset = alignment - (curr->base % alignment);
+        if (alignment_offset >= curr->size) {
+            prev = curr;
+            curr = curr->next;
+            continue;
+        }
+        size_t potential_base = curr->base + alignment_offset; 
+        size_t potential_size = curr->size - alignment_offset;
+        
+        if (potential_size >= size && potential_size >= BASE_PAGE_SIZE) {
+            debug_printf("we made it in to the allocation\n");
+            if (alignment_offset > 0) {
+                struct metadata *splitOff = slab_alloc(&(mm->ma));
+                if (splitOff == NULL) {
+                    debug_printf("splitOff is null\n");
+                }
+                splitOff->size = alignment_offset;
+                splitOff->base = curr->base;
+                splitOff->data = curr->data;
+                splitOff->used = false;
+                
+                prev->next = splitOff;
+
+                splitOff->next = curr;
+                curr->size = curr->size - alignment_offset;
+                curr->base = potential_base;
+                
+                prev = splitOff;
+            } 
+            if (curr->size > size) {
+                //split off end
+            }
+            
+            // TODO: make this better
+            struct slot_allocator * sa = mm->ca;
+            struct capref * cr = slab_alloc(&(mm->ma));
+            debug_print_capref(*cr);
+            slot_prealloc_alloc((struct slot_prealloc *) sa, cr);
+            
+            cap_retype(*cr, (curr->data), curr->size, ObjType_RAM, size);
+
+            debug_print_capref(*cr);
+            // retcap->cnode = cr->cnode;
+            // retcap->slot = cr->slot;
+            debug_printf("made it to the end of allocating\n");
+            return SYS_ERR_OK;
+        }
+        prev = curr; 
+        curr = curr->next;
+    }
+
+    // size_t align_checker = alignment;
+    // while (true) {
+    //     if (align_checker == BASE_PAGE_SIZE) {
+    //         break;
+    //     }
+    //     if (align_checker % 2 != 0 || align_checker < BASE_PAGE_SIZE) {
+    //         return MM_ERR_BAD_ALIGNMENT;
+    //     }
+    //     align_checker /= 2;
+    // }
     
-    return SYS_ERR_OK;
+    return MM_ERR_ALLOC_CONSTRAINTS;
 }
 
 
@@ -219,6 +328,9 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
 errval_t mm_alloc_from_range_aligned(struct mm *mm, size_t base, size_t limit, size_t size,
                                      size_t alignment, struct capref *retcap)
 {
+    // for (int i = 0; i < 100; i++) {
+    // debug_printf("made it to start of mm_alloc_from_range_aligned\n");
+    // }
     // make compiler happy about unused parameters
     (void)mm;
     (void)base;
@@ -262,7 +374,9 @@ errval_t mm_free(struct mm *mm, struct capref cap)
     // make compiler happy about unused parameters
     (void)mm;
     (void)cap;
-
+    // for (int i = 0; i < 100; i++) {
+    //     debug_printf("made it to start of mm_free\n");
+    // }
     // TODO:
     //   - add the memory back to the allocator by marking the region as free
     //
@@ -315,6 +429,9 @@ size_t mm_mem_total(struct mm *mm)
  */
 void mm_mem_get_free_range(struct mm *mm, lpaddr_t *base, lpaddr_t *limit)
 {
+    // // for (int i = 0; i < 100; i++) {
+    //     debug_printf("made it to start of mm_get_free_range\n");
+    // }
     // make compiler happy about unused parameters
     (void)mm;
     (void)base;

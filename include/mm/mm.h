@@ -41,8 +41,9 @@ struct mm {
     struct slot_allocator *ca;      ///< Slot allocator used for allocating nodes
     slot_alloc_refill_fn_t refill;  ///< Function to refill the slot allocator
     struct slab_allocator ma;       ///< Slab allocator for metadata
-    char slab_buf[512];             // TODO: dynamically allocate a buffer 
+    char slab_buf[2048];             // TODO: dynamically allocate a buffer 
     struct metadata *root;          ///< Pointer to metadata linked list root
+    struct metadata *freelist;
     enum objtype objtype;           ///< Type of capabilities stored
     size_t free_mem;                ///< Bytes of free memory
     size_t total_mem;               ///< Total number of bytes managed
@@ -52,8 +53,11 @@ struct mm {
  *@brief Linked list element for capability linked list
  */
 struct metadata {
+    genpaddr_t base;
+    size_t size;
     struct metadata *next;
     struct capref data;
+    bool used;
 };
 
 /**

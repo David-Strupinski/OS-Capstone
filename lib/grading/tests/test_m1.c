@@ -41,7 +41,7 @@
 static bool check_cap_size(struct capref cap, size_t size)
 {
     errval_t err;
-
+    
     struct capability capability;
     err = cap_direct_identify(cap, &capability);
     if (err_is_fail(err)) {
@@ -67,6 +67,7 @@ static void alloc_one(struct mm *mem)
 
     struct capref cap;
     err = mm_alloc(mem, BASE_PAGE_SIZE, &cap);
+    
     if (err_is_fail(err)) {
         grading_test_fail("A1-1", "failed to allocate a single frame\n");
         return;
@@ -167,7 +168,8 @@ static void alloc_and_map(void)
 errval_t grading_run_tests_physical_memory(struct mm *mm)
 {
     if (grading_options.m1_subtest_run == 0) {
-        return SYS_ERR_OK;
+        debug_printf("\nstill trying to not run the tests\n\n");
+        //return SYS_ERR_OK;
     }
 
 

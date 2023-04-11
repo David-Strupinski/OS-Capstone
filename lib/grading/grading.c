@@ -76,7 +76,7 @@ void grading_test_mm(struct mm *test)
 {
     grading_printf("reached grading_test_mm.\n");
 
-    grading_parse_arguments();
+    grading_parse_arguments(); 
     grading_run_tests_physical_memory(test);
 }
 

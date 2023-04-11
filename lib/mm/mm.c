@@ -54,7 +54,7 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     // initialize the slab allocator that holds the metadata
     // TODO: change this to be dynamically allocated
     slab_init(&mm->ma, sizeof(struct metadata), NULL);
-    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(64, sizeof(struct metadata)));
+    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(1024, sizeof(struct metadata)));
     
     return SYS_ERR_OK;
 }
@@ -161,6 +161,7 @@ errval_t mm_add(struct mm *mm, struct capref cap)
     cap_metadata->base = capability.u.ram.base;
     cap_metadata->size = capability.u.ram.bytes;
     cap_metadata->used = false;
+    cap_metadata->capability_base = capability.u.ram.base;
 
     // add the new capability to the free list
     freeListRoot->next = mm->freelist;
@@ -169,6 +170,7 @@ errval_t mm_add(struct mm *mm, struct capref cap)
     freeListRoot->base = capability.u.ram.base;
     freeListRoot->size = capability.u.ram.bytes;
     freeListRoot->used = false;
+    freeListRoot->capability_base = capability.u.ram.base;
 
     // update the free and total memory
     mm->free_mem += capability.u.ram.bytes;
@@ -202,18 +204,7 @@ errval_t mm_add(struct mm *mm, struct capref cap)
  */
 errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct capref *retcap)
 {
-    // for (int i = 0; i < 100; i++) {
-    // debug_printf("made it to start of mm_alloc_aligned\n");
-    // }
-    // make compiler happy about unused parameters
-    (void)mm;
-    (void)alignment;
-    (void)size;
-    (void)retcap;
-
     // check alignment input value
-    // TODO: test this code
-
     if (alignment < BASE_PAGE_SIZE) {
         return MM_ERR_BAD_ALIGNMENT;
     }
@@ -227,13 +218,8 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
     }
 
     // traverse list looking for space
-
-    if (mm->root == NULL) {
-        return MM_ERR_ALLOC_CONSTRAINTS;
-    }
-
     struct metadata * curr = mm->freelist;
-    struct metadata * prev = mm->freelist;
+    struct metadata * prev = NULL;
     while (curr != NULL) {
         size_t alignment_offset = alignment - (curr->base % alignment);
         if (alignment_offset == alignment) {
@@ -247,47 +233,66 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
     
         genpaddr_t potential_base = curr->base + alignment_offset; 
         size_t potential_size = curr->size - alignment_offset;
-        
-        if (potential_size >= size && potential_size >= BASE_PAGE_SIZE) {
-            debug_printf("we made it in to the allocation\n");
-            if (alignment_offset > 0) {
-                struct metadata *splitOff = slab_alloc(&(mm->ma));
-                if (splitOff == NULL) {
-                    debug_printf("splitOff is null\n");
-                }
-                splitOff->size = alignment_offset;
-                splitOff->base = curr->base;
-                splitOff->data = curr->data;
-                splitOff->used = false;
-                
-                prev->next = splitOff;
-
-                splitOff->next = curr;
-                curr->size = curr->size - alignment_offset;
-                curr->base = potential_base;
-                
-                prev = splitOff;
-            } 
-            if (curr->size > size) {
-                //split off end
+        if (curr->used == false) {
+            size_t aligned_size = curr->base - curr->capability_base;
+            if (aligned_size % alignment!= 0) {
+                aligned_size = aligned_size + alignment - (aligned_size%alignment);
             }
-            
-            // TODO: make this better
-            struct slot_allocator * sa = mm->ca;
-            //retcap = slab_alloc(&(mm->ma));
-            
-            slot_prealloc_alloc((struct slot_prealloc *) sa, retcap);
-            debug_print_capref(*retcap);
-            debug_printf("alignment_offset: %d\n", alignment_offset);
-            debug_printf("curr->size: %d\n", curr->size);
-            debug_printf("size requested: %d\n", size);
-            debug_printf("curr->base: %lli\n", curr->base);
+            if (potential_size >= size && potential_size >= BASE_PAGE_SIZE) {
+                if (alignment_offset > 0) {
+                    struct metadata *splitOff = slab_alloc(&(mm->ma));
+                    if (splitOff == NULL) {
+                        debug_printf("splitOff is null (begin)\n");
 
-            cap_retype(*retcap, (curr->data), size, ObjType_RAM, size);
+                        return MM_ERR_SLAB_ALLOC_FAIL;
+                    }
+                    splitOff->size = alignment_offset;
+                    splitOff->base = curr->base;
+                    splitOff->capability_base = curr->capability_base;
+                    splitOff->data = curr->data;
+                    splitOff->used = false;
+                    if (prev == NULL) {
+                        mm->freelist = splitOff;
+                        prev = mm->freelist;
+                    } else {
+                        prev->next = splitOff;
+                    }
+                    
 
-            debug_print_capref(*retcap);
-            debug_printf("made it to the end of allocating\n");
-            return SYS_ERR_OK;
+                    splitOff->next = curr;
+                    curr->size = curr->size - alignment_offset;
+                    curr->base = potential_base;
+                } 
+                if (curr->size > size) {
+                    struct metadata *splitOff = slab_alloc(&(mm->ma));
+                    if (splitOff == NULL) {
+                        debug_printf("splitOff is null (end)\n");
+                        return MM_ERR_SLAB_ALLOC_FAIL;
+                    }
+                    splitOff->size = curr->size - size;
+                    splitOff->base = curr->base + size;
+                    splitOff->capability_base = curr->capability_base;
+                    splitOff->data = curr->data;
+                    splitOff->used = false;
+                    splitOff->next = curr->next;
+                    
+                    curr->next = splitOff;
+                    curr->size = size;
+                }
+                
+                
+                struct slot_prealloc * toPass = (struct slot_prealloc *)mm->ca;
+                errval_t err = slot_prealloc_refill(toPass);
+                if (err_is_fail(err)) {
+                    return MM_ERR_ALLOC_CONSTRAINTS;
+                }
+                slot_prealloc_alloc(toPass, retcap);
+                
+                cap_retype(*retcap, (curr->data), aligned_size, ObjType_RAM, size);
+
+                curr->used = true;
+                return SYS_ERR_OK;
+            }
         }
         prev = curr; 
         curr = curr->next;
@@ -303,7 +308,7 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
     //     }
     //     align_checker /= 2;
     // }
-    
+    debug_printf("failed to find a free block\n");
     return MM_ERR_ALLOC_CONSTRAINTS;
 }
 

@@ -54,7 +54,7 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     // initialize the slab allocator that holds the metadata
     // TODO: change this to be dynamically allocated
     slab_init(&mm->ma, sizeof(struct metadata), NULL);
-    slab_grow(&mm->ma, mm->slab_buf, 2048);
+    slab_grow(&mm->ma, mm->slab_buf, SLAB_STATIC_SIZE(64, sizeof(struct metadata)));
     
     return SYS_ERR_OK;
 }
@@ -236,12 +236,16 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
     struct metadata * prev = mm->freelist;
     while (curr != NULL) {
         size_t alignment_offset = alignment - (curr->base % alignment);
+        if (alignment_offset == alignment) {
+            alignment_offset = 0;
+        }
         if (alignment_offset >= curr->size) {
             prev = curr;
             curr = curr->next;
             continue;
         }
-        size_t potential_base = curr->base + alignment_offset; 
+    
+        genpaddr_t potential_base = curr->base + alignment_offset; 
         size_t potential_size = curr->size - alignment_offset;
         
         if (potential_size >= size && potential_size >= BASE_PAGE_SIZE) {
@@ -270,15 +274,18 @@ errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct c
             
             // TODO: make this better
             struct slot_allocator * sa = mm->ca;
-            struct capref * cr = slab_alloc(&(mm->ma));
-            debug_print_capref(*cr);
-            slot_prealloc_alloc((struct slot_prealloc *) sa, cr);
+            //retcap = slab_alloc(&(mm->ma));
             
-            cap_retype(*cr, (curr->data), curr->size, ObjType_RAM, size);
+            slot_prealloc_alloc((struct slot_prealloc *) sa, retcap);
+            debug_print_capref(*retcap);
+            debug_printf("alignment_offset: %d\n", alignment_offset);
+            debug_printf("curr->size: %d\n", curr->size);
+            debug_printf("size requested: %d\n", size);
+            debug_printf("curr->base: %lli\n", curr->base);
 
-            debug_print_capref(*cr);
-            // retcap->cnode = cr->cnode;
-            // retcap->slot = cr->slot;
+            cap_retype(*retcap, (curr->data), size, ObjType_RAM, size);
+
+            debug_print_capref(*retcap);
             debug_printf("made it to the end of allocating\n");
             return SYS_ERR_OK;
         }

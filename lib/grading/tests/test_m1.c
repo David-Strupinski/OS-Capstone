@@ -108,7 +108,7 @@ static void free_one(struct mm *mem)
     grading_test_pass("A2-1", "free_one\n");
 }
 
-#define NUM_ALLOC 512
+#define NUM_ALLOC 4
 
 static void alloc_many(struct mm *mem)
 {

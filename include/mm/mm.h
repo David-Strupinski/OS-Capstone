@@ -31,6 +31,17 @@ __BEGIN_DECLS
 typedef errval_t (*slot_alloc_refill_fn_t)(struct slot_allocator *ca);
 
 /**
+ *@brief Linked list element for capability linked list
+ */
+struct metadata {
+    genpaddr_t base;
+    size_t size;
+    struct metadata *next;
+    struct capref data;
+    bool used;
+};
+
+/**
  * @brief Memory manager instance data
  *
  * This should be opaque from the perspective of the client, but to allow
@@ -41,7 +52,7 @@ struct mm {
     struct slot_allocator *ca;      ///< Slot allocator used for allocating nodes
     slot_alloc_refill_fn_t refill;  ///< Function to refill the slot allocator
     struct slab_allocator ma;       ///< Slab allocator for metadata
-    char slab_buf[2048];             // TODO: dynamically allocate a buffer 
+    char slab_buf[SLAB_STATIC_SIZE(64, sizeof(struct metadata))];             // TODO: dynamically allocate a buffer 
     struct metadata *root;          ///< Pointer to metadata linked list root
     struct metadata *freelist;
     enum objtype objtype;           ///< Type of capabilities stored
@@ -49,16 +60,7 @@ struct mm {
     size_t total_mem;               ///< Total number of bytes managed
 };
 
-/**
- *@brief Linked list element for capability linked list
- */
-struct metadata {
-    genpaddr_t base;
-    size_t size;
-    struct metadata *next;
-    struct capref data;
-    bool used;
-};
+
 
 /**
  * @brief initializes the memory manager instance

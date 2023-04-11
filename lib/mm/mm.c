@@ -414,40 +414,41 @@ errval_t mm_free(struct mm *mm, struct capref cap)
         return MM_ERR_CAP_INVALID;
     } 
 
-    // The (parts of) memory region has already been freed
+    // Search for meta data in free list
     struct metadata* curr = mm->freelist;
-    while (curr != NULL) {
-        if (0) /* check equality of capref*/ {
-            return MM_ERR_DOUBLE_FREE;
-        } 
-        curr = curr->next;
-    }
-
-    // The memory was not allocated by this allocator
-    struct metadata* prev = NULL; 
-    struct metadata* curr = mm->root;
-    found = false;
+    bool found = false;
     while (curr != NULL && !found) {
-        if (0) /* check equality of capref*/ {
+        if (curr->base == capability.u.ram.base) {
             found = true;
         } else {
-            prev = curr;
             curr = curr->next;
         }
     }
+
+    // Err if not found
     if (!found) return MM_ERR_NOT_FOUND; 
 
+    // Err if the (parts of) memory region has already been freed
+    if (curr->used == false) return MM_ERR_DOUBLE_FREE;
+
     // Deallocate the slot
-    struct slot_allocator * sa = mm->ca;
-    slot_prealloc_free((struct slot_prealloc *) sa, cap);
+    struct slot_prealloc * toPass = (struct slot_prealloc *) mm->ca;
+    
+    // TODO: figure out when (and if) we should refill
+    err = slot_prealloc_refill(toPass);
+    if (err_is_fail(err)) {
+        return MM_ERR_ALLOC_CONSTRAINTS;
+    }
+    slot_prealloc_free(toPass, cap);    
+    err = slot_prealloc_refill(toPass);
+    if (err_is_fail(err)) {
+        return MM_ERR_ALLOC_CONSTRAINTS;
+    }
 
-    // Remove from active list
-    if (prev != NULL) prev->next = curr->next;
+    // Mark as unused in root list
+    curr->used = false;
 
-    // Add to free list
-    struct metadata* l = mm->freelist;
-    mm->freelist = curr;
-    curr->next = l;
+    // TODO: do the coalescing thingy
 
     return SYS_ERR_OK;
 }

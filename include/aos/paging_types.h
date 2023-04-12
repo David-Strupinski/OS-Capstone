@@ -41,7 +41,11 @@
 
 typedef int paging_flags_t;
 
-
+struct mappedPT {
+    struct mappedPT *next;
+    bool is_mapped;
+    struct capref cap;
+};
 
 
 /// struct to store the paging state of a process' virtual address space.
@@ -53,7 +57,7 @@ struct paging_state {
     /// addresses starting from `current_vaddr` are free
     /// TODO(M2): replace me with proper region management
     lvaddr_t current_vaddr;
-
+    struct mappedPT *mappedPTs;
 };
 
 

@@ -18,6 +18,7 @@
 #include <aos/except.h>
 #include <aos/slab.h>
 #include "threads_priv.h"
+#include <mm/slot_alloc.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -91,7 +92,6 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
 {
     // make compiler happy about unused parameters
     (void)root;
-    (void)ca;
 
     // TODO (M1):
     //  - Implement basic state struct initialization
@@ -144,6 +144,8 @@ errval_t paging_init(void)
     // you can handle page faults in any thread of a domain.
     // TIP: it might be a good idea to call paging_init_state() from here to
     // avoid code duplication.
+    struct capref root;  // TODO: replace placeholder
+    paging_init_state(&current, 0, root, get_default_slot_allocator());  // TODO: use page size instead of 0
     set_current_paging_state(&current);
     return SYS_ERR_OK;
 }
@@ -214,6 +216,8 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
      *   - Find a region of free virtual address space that is large enough to
      *     accomodate a buffer of size `bytes`.
      */
+    // lvaddr_t curr = st->current_vaddr;
+    // lvaddr_t next = ROUND_UP(curr + bytes, alignment);
 
     return LIB_ERR_NOT_IMPLEMENTED;
 }
@@ -236,14 +240,6 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
 errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_t bytes,
                                       struct capref frame, size_t offset, int flags)
 {
-    // make compiler happy about unused parameters
-    (void)st;
-    (void)buf;
-    (void)bytes;
-    (void)frame;
-    (void)offset;
-    (void)flags;
-
     // TODO(M1):
     //  - decide on which virtual address to map the frame at
     //  - map the frame assuming all mappings will fit into one leaf page table (L3)  (fail otherwise)
@@ -251,7 +247,60 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //
     // Hint:
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
-    //
+    
+    // verify we haven't already mapped the frame
+    // traverse through st->mappedPTs and compare the capref to the one passed in
+    // if it's already mapped, return an error
+    while (st->mappedPTs != NULL) {
+        if (capcmp(st->mappedPTs->cap, frame) == 0) {
+            printf("frame already mapped\n");
+            return LIB_ERR_FRAME_ALLOC;
+        }
+        st->mappedPTs = st->mappedPTs->next;
+    }
+
+    // map the frame
+    struct capref mapping;
+    struct slot_prealloc *ca = (struct slot_prealloc *)st->slot_alloc;
+    errval_t err = slot_prealloc_refill(ca);
+    if (err_is_fail(err)) {
+        printf("slot_prealloc_refill failed\n");
+        return err;
+    }
+    slot_prealloc_alloc(ca, &mapping);
+    
+    // calculate frame capability offset
+    if (offset % BASE_PAGE_SIZE != 0) {
+        printf("offset is not a multiple of BASE_PAGE_SIZE\n");
+        return LIB_ERR_FRAME_ALLOC;
+    }
+    size_t aligned_bytes = ROUND_UP(bytes, BASE_PAGE_SIZE);
+    err = vnode_map(cap_vroot, frame, st->current_vaddr, flags, offset, 1, mapping);
+    if (err_is_fail(err)) {
+        printf("vnode_map failed\n");
+        return err;
+    }
+
+    // return the virtual address of the created mapping through buf
+    *buf = (void *)st->current_vaddr;
+
+    st->current_vaddr += aligned_bytes;
+    
+    // check if the mapping is valid
+    if (get_cap_level(mapping) != ObjType_VNode_AARCH64_l3_Mapping) {
+        printf("mapping failed\n");
+        return LIB_ERR_FRAME_ALLOC;
+    }
+
+    // add the mapping to the list of mapped page tables
+    // TODO: we need memory!!!!
+    struct mappedPT newPT = {
+        .next = st->mappedPTs,
+        .is_mapped = true,
+        .cap = mapping,
+    };
+    st->mappedPTs = &newPT;
+
     // TODO(M2):
     // - General case: you will need to handle mappings spanning multiple leaf page tables.
     // - Find and allocate free region of virtual address space of at least bytes in size.
@@ -261,7 +310,7 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     // Hint:
     //  - think about what mapping configurations are actually possible
 
-    return LIB_ERR_NOT_IMPLEMENTED;
+    return SYS_ERR_OK;
 }
 
 /**

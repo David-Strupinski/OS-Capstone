@@ -102,7 +102,10 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     
     // we added this
     st->slot_alloc = ca;
-    
+
+    // TODO: init mappedPTs
+    // st->mappedPTs;
+
     return SYS_ERR_OK;
 }
 
@@ -144,8 +147,8 @@ errval_t paging_init(void)
     // you can handle page faults in any thread of a domain.
     // TIP: it might be a good idea to call paging_init_state() from here to
     // avoid code duplication.
-    struct capref root;  // TODO: replace placeholder
-    paging_init_state(&current, 0, root, get_default_slot_allocator());  // TODO: use page size instead of 0
+    struct capref root;  // TODO: replace placeholder?
+    paging_init_state(&current, SIZE_MAX / 4, root, get_default_slot_allocator());
     set_current_paging_state(&current);
     return SYS_ERR_OK;
 }
@@ -216,10 +219,13 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
      *   - Find a region of free virtual address space that is large enough to
      *     accomodate a buffer of size `bytes`.
      */
-    // lvaddr_t curr = st->current_vaddr;
-    // lvaddr_t next = ROUND_UP(curr + bytes, alignment);
+    size_t aligned_bytes = ROUND_UP(bytes, alignment);
 
-    return LIB_ERR_NOT_IMPLEMENTED;
+    *buf = (void *) st->current_vaddr;
+
+    st->current_vaddr += aligned_bytes;
+
+    return SYS_ERR_OK;
 }
 
 
@@ -274,17 +280,14 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
         printf("offset is not a multiple of BASE_PAGE_SIZE\n");
         return LIB_ERR_FRAME_ALLOC;
     }
-    size_t aligned_bytes = ROUND_UP(bytes, BASE_PAGE_SIZE);
-    err = vnode_map(cap_vroot, frame, st->current_vaddr, flags, offset, 1, mapping);
+    err = vnode_map(cap_vroot, frame, st->current_vaddr, flags, VMSAv8_64_L3_INDEX(offset), 1, mapping);
     if (err_is_fail(err)) {
         printf("vnode_map failed\n");
         return err;
     }
 
     // return the virtual address of the created mapping through buf
-    *buf = (void *)st->current_vaddr;
-
-    st->current_vaddr += aligned_bytes;
+    paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
     
     // check if the mapping is valid
     if (get_cap_level(mapping) != ObjType_VNode_AARCH64_l3_Mapping) {

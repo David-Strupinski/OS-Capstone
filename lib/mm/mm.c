@@ -50,7 +50,6 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
     (void)slab_buf;
     (void)slab_sz;
     
-    
     // initialize the slab allocator that holds the metadata
     // TODO: change this to be dynamically allocated
     slab_init(&mm->ma, sizeof(struct metadata), NULL);
@@ -75,9 +74,6 @@ errval_t mm_init(struct mm *mm, enum objtype objtype, struct slot_allocator *ca,
  */
 errval_t mm_destroy(struct mm *mm)
 {
-    // for (int i = 0; i < 100; i++) {
-    // debug_printf("made it to start of mm_destroy\n");
-    // }
     // make the compiler happy
     (void)mm;
 
@@ -108,10 +104,8 @@ errval_t mm_destroy(struct mm *mm)
 errval_t mm_add(struct mm *mm, struct capref cap)
 {
     errval_t err;
-// for (int i = 0; i < 100; i++) {
-//     debug_printf("made it to start of mm_add\n");
-//     }
-    // get the capability and check error
+    
+    // get the capability
     struct capability capability;
     err = cap_direct_identify(cap, &capability);
     if (err_is_fail(err)) {
@@ -119,23 +113,21 @@ errval_t mm_add(struct mm *mm, struct capref cap)
     }
     
     // check for invalid input
-    // TODO: read error codes and see if there are any checks we are missing
     if (capability.type != ObjType_RAM) {
         // not a RAM capability
-        printf("we got a non ram capability\n");
         return MM_ERR_CAP_TYPE;
     }
     if (capability.u.ram.bytes <= 0 || capability.u.ram.base % BASE_PAGE_SIZE != 0) {
-        printf("RAM doesn't exist or is not aligned to page boundary\n");
+        // RAM doesn't exist or is not aligned to page boundary
         return MM_ERR_CAP_INVALID;
     }
     
     // walk the metadata and see if the memory is already managed, 
     // returning MM_ERR_ALREADY_PRESENT if so
-    struct metadata *curr = mm->root;
+    struct metadata *curr = mm->freelist;
     while (curr != NULL) {
         struct capability curr_cap;
-        err = cap_direct_identify(curr->data, &curr_cap);
+        err = cap_direct_identify(curr->capability, &curr_cap);
         if (err_is_fail(err)){
             return err_push(err, LIB_ERR_CAP_IDENTIFY);
         }
@@ -151,26 +143,17 @@ errval_t mm_add(struct mm *mm, struct capref cap)
         return MM_ERR_SLAB_ALLOC_FAIL;
     }
 
-    struct metadata *freeListRoot = slab_alloc(&(mm->ma));    
-
-    // TODO: perhaps sort and coalesce neighboring capabilities
-    // enqueue the new metadata
-    cap_metadata->data = cap;
-    cap_metadata->next = mm->root;
-    mm->root = cap_metadata;
+    // add the new capability to the free list
+    cap_metadata->next = mm->freelist;
+    cap_metadata->prev = NULL;
+    if (mm->freelist != NULL) mm->freelist->prev = cap_metadata;
+    mm->freelist = cap_metadata;
+    cap_metadata->capability = cap;
+    cap_metadata->capability_base = capability.u.ram.base;
+    cap_metadata->capability_slot = cap.slot;
     cap_metadata->base = capability.u.ram.base;
     cap_metadata->size = capability.u.ram.bytes;
     cap_metadata->used = false;
-    cap_metadata->capability_base = capability.u.ram.base;
-
-    // add the new capability to the free list
-    freeListRoot->next = mm->freelist;
-    mm->freelist = freeListRoot;
-    freeListRoot->data = cap;
-    freeListRoot->base = capability.u.ram.base;
-    freeListRoot->size = capability.u.ram.bytes;
-    freeListRoot->used = false;
-    freeListRoot->capability_base = capability.u.ram.base;
 
     // update the free and total memory
     mm->free_mem += capability.u.ram.bytes;
@@ -204,133 +187,124 @@ errval_t mm_add(struct mm *mm, struct capref cap)
  */
 errval_t mm_alloc_aligned(struct mm *mm, size_t size, size_t alignment, struct capref *retcap)
 {
-    /*size_t aligned_size = size;
-    if (aligned_size % alignment!= 0) {
-        aligned_size = aligned_size + alignment - (aligned_size%alignment);
-    }*/
     size_t aligned_size = ROUND_UP(size, alignment);
 
-    // check alignment input value
+    // check alignment input value (power of two starting at base page size)
     if (alignment < BASE_PAGE_SIZE) {
         return MM_ERR_BAD_ALIGNMENT;
     }
-
     if ((alignment & (alignment - 1)) != 0) {
         return MM_ERR_BAD_ALIGNMENT;
     }
 
+    // check that we have enough memory
     if (mm->free_mem < aligned_size || mm->free_mem < BASE_PAGE_SIZE) {
         return MM_ERR_OUT_OF_MEMORY;
     }
 
-    // traverse list looking for space
-    struct metadata * curr = mm->freelist;
-    struct metadata * prev = NULL;
-    while (curr != NULL) {
+    // traverse the metadata list looking for a free space
+    for (struct metadata * curr = mm->freelist; curr != NULL; curr = curr->next) {
+        // determine the required alignment and skip this node if it is too great
         size_t alignment_offset = alignment - (curr->base % alignment);
         if (alignment_offset == alignment) {
             alignment_offset = 0;
         }
         if (alignment_offset >= curr->size) {
-            prev = curr;
             curr = curr->next;
             continue;
         }
     
+        // compute the required base and size, allocating this node if everything fits
         genpaddr_t potential_base = curr->base + alignment_offset; 
         size_t potential_size = curr->size - alignment_offset;
         if (curr->used == false) {
             if (potential_size >= aligned_size && potential_size >= BASE_PAGE_SIZE) {
+                // refill the slab allocator if necessary
+                if (slab_freecount(&(mm->ma)) < 16) { //!mm->currentlyRefillingSA) {
+                    // TODO: refill the slab allocator
+                    //mm->currentlyRefillingSA = true;
+                    //mm->ma.mem_manager = mm;
+                    slab_default_refill(&(mm->ma));
+                    //mm->ma.mem_manager = NULL;
+                    //mm->currentlyRefillingSA = false;
+                }
+
+                // split a node if there is enough space but the alignment is not correct
                 if (alignment_offset > 0) {
-                    if (slab_freecount(&(mm->ma)) < 16) { //!mm->currentlyRefillingSA) {
-                        printf("less than 16 available\n");
-                        //mm->currentlyRefillingSA = true;
-                        //mm->ma.mem_manager = mm;
-                        slab_default_refill(&(mm->ma));
-                        //mm->ma.mem_manager = NULL;
-                        //mm->currentlyRefillingSA = false;
-                    }
-                    struct metadata *splitOff = slab_alloc(&(mm->ma));
-                    if (splitOff == NULL) {
-                        debug_printf("splitOff is null (begin)\n");
-
+                    // allocate space for the new node and set the fields
+                    struct metadata *splitoff = slab_alloc(&(mm->ma));
+                    if (splitoff == NULL) {
                         return MM_ERR_SLAB_ALLOC_FAIL;
                     }
-                    splitOff->size = alignment_offset;
-                    splitOff->base = curr->base;
-                    splitOff->capability_base = curr->capability_base;
-                    splitOff->data = curr->data;
-                    splitOff->used = false;
-                    if (prev == NULL) {
-                        mm->freelist = splitOff;
-                        prev = mm->freelist;
+
+                    // set the new node's fields
+                    splitoff->base = curr->base;
+                    splitoff->size = alignment_offset;
+                    splitoff->used = false;
+                    splitoff->prev = curr->prev == NULL ? NULL : curr->prev;
+                    splitoff->next = curr;
+                    splitoff->capability = curr->capability;
+                    splitoff->capability_base = curr->capability_base;
+                    splitoff->capability_slot = curr->capability_slot;
+                    if (curr->prev == NULL) {
+                        mm->freelist = splitoff;
                     } else {
-                        prev->next = splitOff;
+                        curr->prev->next = splitoff;
                     }
-                    
-
-                    splitOff->next = curr;
-                    curr->size = curr->size - alignment_offset;
                     curr->base = potential_base;
-                } 
+                    curr->size = curr->size - alignment_offset;
+                    curr->prev = splitoff;
+                }
+
+                // split off the remainder of the node if possible
                 if (curr->size > aligned_size) {
-                    if (slab_freecount(&(mm->ma)) < 16) {//&& !mm->currentlyRefillingSA) {
-                        printf("less than 16 available\n");
-                        //mm->currentlyRefillingSA = true;
-                        //mm->ma.mem_manager = mm;
-                        slab_default_refill(&(mm->ma));
-                        //mm->ma.mem_manager = NULL;
-                        //mm->currentlyRefillingSA = false;
-                    }
-                    struct metadata *splitOff = slab_alloc(&(mm->ma));
-                    if (splitOff == NULL) {
-                        debug_printf("splitOff is null (end)\n");
+                    // allocate space for the new node and set the fields
+                    struct metadata *splitoff = slab_alloc(&(mm->ma));
+                    if (splitoff == NULL) {
                         return MM_ERR_SLAB_ALLOC_FAIL;
                     }
-                    splitOff->size = curr->size - aligned_size;
-                    splitOff->base = curr->base + aligned_size;
-                    splitOff->capability_base = curr->capability_base;
-                    splitOff->data = curr->data;
-                    splitOff->used = false;
-                    splitOff->next = curr->next;
-                    
-                    curr->next = splitOff;
+
+                    // set the new node's fields
+                    splitoff->base = curr->base + aligned_size;
+                    splitoff->size = curr->size - aligned_size;
+                    splitoff->used = false;
+                    splitoff->prev = curr;
+                    splitoff->next = curr->next;
+                    splitoff->capability = curr->capability;
+                    splitoff->capability_base = curr->capability_base;
+                    splitoff->capability_slot = curr->capability_slot;
+                    if (curr->prev == NULL) {
+                        mm->freelist = splitoff;
+                    } else {
+                        curr->prev->next = splitoff;
+                    }
                     curr->size = aligned_size;
+                    curr->next = splitoff;
                 }
                 
-                
-                struct slot_prealloc * toPass = (struct slot_prealloc *)mm->ca;
-                errval_t err = slot_prealloc_refill(toPass);
+                // allocate a new slot for the return capability
+                struct slot_prealloc *ca = (struct slot_prealloc *)mm->ca;
+                errval_t err = slot_prealloc_refill(ca);
                 if (err_is_fail(err)) {
                     return MM_ERR_ALLOC_CONSTRAINTS;
                 }
-                slot_prealloc_alloc(toPass, retcap);
+                slot_prealloc_alloc(ca, retcap);
                 
+                // copy the original capability (with updated fields) into the new slot
                 gensize_t aligned_offset = curr->base - curr->capability_base;
-                if (aligned_offset % alignment!= 0) {
+                if (aligned_offset % alignment != 0) {
                    aligned_offset = aligned_offset + alignment - (aligned_offset % alignment);
                 }
-                cap_retype(*retcap, (curr->data), aligned_offset, ObjType_RAM, aligned_size);
+                cap_retype(*retcap, curr->capability, aligned_offset, ObjType_RAM, aligned_size);
 
+                // mark the current metadata node as used and return
                 curr->used = true;
                 return SYS_ERR_OK;
             }
         }
-        prev = curr; 
-        curr = curr->next;
     }
 
-    // size_t align_checker = alignment;
-    // while (true) {
-    //     if (align_checker == BASE_PAGE_SIZE) {
-    //         break;
-    //     }
-    //     if (align_checker % 2 != 0 || align_checker < BASE_PAGE_SIZE) {
-    //         return MM_ERR_BAD_ALIGNMENT;
-    //     }
-    //     align_checker /= 2;
-    // }
-    debug_printf("failed to find a free block\n");
+    // no suitable block was found
     return MM_ERR_ALLOC_CONSTRAINTS;
 }
 
@@ -413,26 +387,25 @@ errval_t mm_free(struct mm *mm, struct capref cap)
     // need to handle partial frees, where a capability was split up by the client
     // and only a part of it was returned.
 
+    // get the capability
     struct capability capability;
     errval_t err = cap_direct_identify(cap, &capability);
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_CAP_IDENTIFY);
     }
 
-    // The capability is not a RAM capability
+    // check that the capability is a RAM capability
     if (capability.type != ObjType_RAM) {
-        printf("we got a non ram capability\n");
         return MM_ERR_CAP_TYPE;
     }
 
-    // The supplied capability was invalid or does not exist.
+    // check that the supplied capability is valid
     if (capability.u.ram.bytes <= 0 || capability.u.ram.base % BASE_PAGE_SIZE != 0) {
-        printf("RAM doesn't exist or is not aligned to page boundary\n");
         return MM_ERR_CAP_INVALID;
     } 
 
-    // Search for meta data in free list
-    struct metadata* curr = mm->freelist;
+    // search the freelist for the capability, returning an error if it is not found
+    struct metadata *curr = mm->freelist;
     bool found = false;
     while (curr != NULL && !found) {
         if (curr->base == capability.u.ram.base) {
@@ -441,31 +414,40 @@ errval_t mm_free(struct mm *mm, struct capref cap)
             curr = curr->next;
         }
     }
-
-    // Err if not found
     if (!found) return MM_ERR_NOT_FOUND; 
 
-    // Err if the (parts of) memory region has already been freed
-    if (curr->used == false) return MM_ERR_DOUBLE_FREE;
-
-    // Deallocate the slot
-    struct slot_prealloc * toPass = (struct slot_prealloc *) mm->ca;
+    // check that the region hasn't already been freed
+    if (curr->used == false) {
+        return MM_ERR_DOUBLE_FREE;
+    }
     
-    // TODO: figure out when (and if) we should refill
-    err = slot_prealloc_refill(toPass);
+    // free the slot that held the capability
+    struct slot_prealloc *ca = (struct slot_prealloc *) mm->ca;
+    err = slot_prealloc_free(ca, cap);
     if (err_is_fail(err)) {
-        return MM_ERR_ALLOC_CONSTRAINTS;
-    }
-    slot_prealloc_free(toPass, cap);    
-    err = slot_prealloc_refill(toPass);
-    if (err_is_fail(err)) {
-        return MM_ERR_ALLOC_CONSTRAINTS;
+        return MM_ERR_NOT_FOUND;
     }
 
-    // Mark as unused in root list
+    // deallocate the memory by marking the metadata node as unused
     curr->used = false;
 
-    // TODO: do the coalescing thingy
+    // combine with the surrounding metadata nodes if they are free and from 
+    // the same original capability (note that we can get away with comparing 
+    // just the slot because all original capabilities are on the same cnode 
+    // level)
+    if (curr->prev != NULL && curr->prev->used == false && curr->prev->capability_slot == curr->capability_slot) {
+        // coalesce with the previous node
+        curr->prev->size += curr->size;
+        curr->prev->next = curr->next;
+        slab_free(&mm->ma, curr);
+    }
+    if (curr->next != NULL && curr->next->used == false && curr->next->capability_slot == curr->capability_slot) {
+        // coalesce with the following node
+        struct metadata *old_next = curr->next;
+        curr->size += curr->next->size;
+        curr->next = curr->next->next;
+        slab_free(&mm->ma, old_next);
+    }
 
     return SYS_ERR_OK;
 }

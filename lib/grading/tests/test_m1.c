@@ -126,11 +126,9 @@ static void alloc_many(struct mm *mem)
             grading_test_fail("A3-1", "cap check failed\n");
             return;
         }
-
-        grading_printf("allocated %zu\n", i + 1);
     }
 
-    grading_test_pass("A3-1", "allocate_one\n");
+    grading_test_pass("A3-1", "allocate_many\n");
 }
 
 static void alloc_and_map(void)

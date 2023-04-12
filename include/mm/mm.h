@@ -33,12 +33,14 @@ typedef errval_t (*slot_alloc_refill_fn_t)(struct slot_allocator *ca);
  *@brief Linked list element for capability linked list
  */
 struct metadata {
-    genpaddr_t base;
-    genpaddr_t capability_base;
-    size_t size;
-    struct metadata *next;
-    struct capref data;
-    bool used;
+    genpaddr_t base;             // the base address for this data
+    size_t size;                 // the size of this data
+    bool used;                   // whether or not this data is in use
+    struct metadata *prev;       // the previous node in a doubly-linked list
+    struct metadata *next;       // the next node in a doubly-linked list
+    struct capref capability;    // the original capability
+    genpaddr_t capability_base;  // the base address of the original capability
+    cslot_t capability_slot;     // the slot of the original capability
 };
 
 #define NumStructAlloc 1024
@@ -50,17 +52,14 @@ struct metadata {
  * them to allocate its memory, we declare it in the public header.
  */
 struct mm {
-    // TODO: add your own fields here to track the use of memory etc.
     struct slot_allocator *ca;      ///< Slot allocator used for allocating nodes
     slot_alloc_refill_fn_t refill;  ///< Function to refill the slot allocator
     struct slab_allocator ma;       ///< Slab allocator for metadata
     char slab_buf[SLAB_STATIC_SIZE(NumStructAlloc, sizeof(struct metadata))];             // TODO: dynamically allocate a buffer 
-    struct metadata *root;          ///< Pointer to metadata linked list root
-    struct metadata *freelist;
+    struct metadata *freelist;      ///< Pointer to the first element of the metadata linked list
     enum objtype objtype;           ///< Type of capabilities stored
     size_t free_mem;                ///< Bytes of free memory
     size_t total_mem;               ///< Total number of bytes managed
-    //bool currentlyRefillingSA;      ///< Bool to tell whether we are currently refilling the slot allocator
 };
 
 

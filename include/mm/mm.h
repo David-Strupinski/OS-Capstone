@@ -40,7 +40,6 @@ struct metadata {
     struct metadata *next;       // the next node in a doubly-linked list
     struct capref capability;    // the original capability
     genpaddr_t capability_base;  // the base address of the original capability
-    cslot_t capability_slot;     // the slot of the original capability
 };
 
 #define NumStructAlloc 1024
@@ -296,6 +295,13 @@ size_t mm_mem_total(struct mm *mm);
  *       a region than is free, and likewise the highest address
  */
 void mm_mem_get_free_range(struct mm *mm, lpaddr_t *base, lpaddr_t *limit);
+
+/**
+ * @brief print all blocks managed by allocator
+ *
+ * @param[in] mm   memory manager instance to query
+ */
+void mm_print_map(struct mm *mm);
 
 __END_DECLS
 

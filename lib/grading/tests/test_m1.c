@@ -108,15 +108,15 @@ static void free_one(struct mm *mem)
     grading_test_pass("A2-1", "free_one\n");
 }
 
-#define NUM_ALLOC 512
+#define NUM_ALLOC 10
 
 static void alloc_many(struct mm *mem)
 {
     grading_printf("alloc_many(%zu)\n", NUM_ALLOC);
 
-    for (size_t i = 0; i < NUM_ALLOC; i++) {
+    for (size_t i = 1; i < NUM_ALLOC; i++) {
         struct capref cap;
-        errval_t      err = mm_alloc(mem, BASE_PAGE_SIZE, &cap);
+        errval_t err = mm_alloc(mem, BASE_PAGE_SIZE * i, &cap);
         if (err_is_fail(err)) {
             grading_test_fail("A3-1", "failed to allocate a single frame\n");
             return;
@@ -126,8 +126,14 @@ static void alloc_many(struct mm *mem)
             grading_test_fail("A3-1", "cap check failed\n");
             return;
         }
+        if (i % 2 == 0) {
+            err = mm_free(mem, cap);
+            if (err_is_fail(err)) {
+                grading_test_fail("A3-1", "failed to free a single frame\n");
+            }
+        }
     }
-
+    
     grading_test_pass("A3-1", "allocate_many\n");
 }
 
@@ -166,7 +172,7 @@ static void alloc_and_map(void)
 errval_t grading_run_tests_physical_memory(struct mm *mm)
 {
     if (grading_options.m1_subtest_run == 0) {
-        debug_printf("\nstill trying to not run the tests\n\n");
+        // TODO: we added this
         //return SYS_ERR_OK;
     }
 

@@ -66,14 +66,14 @@ static void alloc_one(struct mm *mem)
     grading_printf("alloc_one(%zu)\n", BASE_PAGE_SIZE);
 
     struct capref cap;
-    err = mm_alloc(mem, BASE_PAGE_SIZE, &cap);
+    err = mm_alloc(mem, BASE_PAGE_SIZE * 4, &cap);
     
     if (err_is_fail(err)) {
         grading_test_fail("A1-1", "failed to allocate a single frame\n");
         return;
     }
 
-    if (!check_cap_size(cap, BASE_PAGE_SIZE)) {
+    if (!check_cap_size(cap, BASE_PAGE_SIZE * 4)) {
         grading_test_fail("A1-1", "cap check failed\n");
         return;
     }
@@ -130,10 +130,11 @@ static void alloc_many(struct mm *mem)
             err = mm_free(mem, cap);
             if (err_is_fail(err)) {
                 grading_test_fail("A3-1", "failed to free a single frame\n");
+                return;
             }
         }
     }
-    
+
     grading_test_pass("A3-1", "allocate_many\n");
 }
 
@@ -169,6 +170,45 @@ static void alloc_and_map(void)
     grading_test_pass("A4-1", "alloc_and_map\n");
 }
 
+static void partial_free(struct mm *mem)
+{
+    errval_t err;
+
+    grading_printf("partial free\n");
+
+    struct capref cap;
+    err = mm_alloc(mem, BASE_PAGE_SIZE * 8, &cap);
+    if (err_is_fail(err)) {
+        grading_test_fail("A5-1", "failed to allocate a frame\n");
+        return;
+    }
+
+    if (!check_cap_size(cap, BASE_PAGE_SIZE * 8)) {
+        grading_test_fail("A5-1", "cap check failed\n");
+        return;
+    }
+
+    struct capref new;
+    err = slot_alloc(&new);
+    if (err_is_fail(err)) {
+        grading_test_fail("A5-1", "failed to allocate slot\n");
+        return;
+    }
+    err = cap_retype(new, cap, BASE_PAGE_SIZE, ObjType_RAM, BASE_PAGE_SIZE * 7);
+    if (err_is_fail(err)) {
+        grading_test_fail("A5-1", "failed to resize capability\n");
+        return;
+    }
+
+    err = mm_free(mem, new);
+    if (err_is_fail(err)) {
+        grading_test_fail("A2-1", "failed to free a single frame\n");
+        return;
+    }
+
+    grading_test_pass("A5-1", "partial_free\n");
+}
+
 errval_t grading_run_tests_physical_memory(struct mm *mm)
 {
     if (grading_options.m1_subtest_run == 0) {
@@ -183,9 +223,10 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     grading_printf("#################################################\n");
 
     alloc_one(mm);
+    free_one(mm);
     alloc_many(mm);
     alloc_and_map();
-    free_one(mm);
+    partial_free(mm);
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 1 (Physical Memory Management)\n");

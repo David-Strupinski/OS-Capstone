@@ -90,21 +90,27 @@ __attribute__((unused)) static errval_t pt_alloc_l3(struct paging_state *st, str
 errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct capref root,
                            struct slot_allocator *ca)
 {
-    // make compiler happy about unused parameters
-    (void)root;
-
     // TODO (M1):
     //  - Implement basic state struct initialization
     // TODO (M2):
     //  -  Implement page fault handler that installs frames when a page fault
     //     occurs and keeps track of the virtual address space.
+
     st->current_vaddr = start_vaddr;
-    
-    // we added this
     st->slot_alloc = ca;
 
-    // TODO: init mappedPTs
-    // st->mappedPTs;
+    // initialize a slab allocator to give us our memory
+    // TODO: make this dynamic allocation, not static.
+    slab_init(&st->ma, sizeof(struct mappedPT), NULL);
+    slab_grow(&st->ma, st->slab_buf, SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct mappedPT)));
+    struct mappedPT *rootMappedPT = slab_alloc(&(st->ma));
+    
+    // TODO: maybe use vnode_map() to map the first init process's page: cap_vroot
+    //vnode_map();
+    st->mappedPTs = rootMappedPT;
+    st->mappedPTs->offset = 0;
+    st->mappedPTs->cap = root;
+    st->mappedPTs->next = NULL;
 
     return SYS_ERR_OK;
 }
@@ -147,8 +153,8 @@ errval_t paging_init(void)
     // you can handle page faults in any thread of a domain.
     // TIP: it might be a good idea to call paging_init_state() from here to
     // avoid code duplication.
-    struct capref root;  // TODO: replace placeholder?
-    paging_init_state(&current, SIZE_MAX / 4, root, get_default_slot_allocator());
+    //struct capref root;  // TODO: replace placeholder?
+    paging_init_state(&current, SIZE_MAX / 4, cap_vroot, get_default_slot_allocator());
     set_current_paging_state(&current);
     return SYS_ERR_OK;
 }
@@ -258,9 +264,9 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     // traverse through st->mappedPTs and compare the capref to the one passed in
     // if it's already mapped, return an error
     while (st->mappedPTs != NULL) {
-        if (capcmp(st->mappedPTs->cap, frame) == 0) {
+        if (capcmp(st->mappedPTs->cap, frame) == 0 && offset == st->mappedPTs->offset) {
             printf("frame already mapped\n");
-            return LIB_ERR_FRAME_ALLOC;
+            //return LIB_ERR_FRAME_ALLOC;
         }
         st->mappedPTs = st->mappedPTs->next;
     }
@@ -274,7 +280,7 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
         return err;
     }
     slot_prealloc_alloc(ca, &mapping);
-    
+    printf("made it here\n");
     // calculate frame capability offset
     if (offset % BASE_PAGE_SIZE != 0) {
         printf("offset is not a multiple of BASE_PAGE_SIZE\n");
@@ -299,7 +305,6 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     // TODO: we need memory!!!!
     struct mappedPT newPT = {
         .next = st->mappedPTs,
-        .is_mapped = true,
         .cap = mapping,
     };
     st->mappedPTs = &newPT;

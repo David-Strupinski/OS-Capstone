@@ -43,10 +43,11 @@ typedef int paging_flags_t;
 
 struct mappedPT {
     struct mappedPT *next;
-    bool is_mapped;
+    size_t offset;
     struct capref cap;
 };
 
+#define NUM_PTS_ALLOC 100
 
 /// struct to store the paging state of a process' virtual address space.
 struct paging_state {
@@ -58,6 +59,9 @@ struct paging_state {
     /// TODO(M2): replace me with proper region management
     lvaddr_t current_vaddr;
     struct mappedPT *mappedPTs;
+    struct slab_allocator ma;       ///< Slab allocator for metadata
+    char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct mappedPT))];
+
 };
 
 

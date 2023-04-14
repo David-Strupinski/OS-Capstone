@@ -116,7 +116,7 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     printf("after\n");
     // pt_alloc(st, ObjType_VNode_AARCH64_l1, st->L1);
     // pt_alloc(st, ObjType_VNode_AARCH64_l1, st->L1);
-    errval_t err = vnode_map(cap_vroot, st->L1, VMSAv8_64_L0_INDEX(st->current_vaddr), VREGION_FLAGS_READ_WRITE, 0/*VMSAv8_64_L1_INDEX(0)*/, 1, st->mapping);
+    errval_t err = vnode_map(cap_vroot, st->L1, VMSAv8_64_L0_INDEX(st->current_vaddr), VREGION_FLAGS_READ_WRITE, 0/*VMSAv8_64_L1_INDEX(0)*/, 1, mapping);
     
     if (err_is_fail(err)) {
 

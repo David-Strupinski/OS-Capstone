@@ -62,6 +62,11 @@ struct paging_state {
     struct slab_allocator ma;       ///< Slab allocator for metadata
     char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct mappedPT))];
 
+    struct capref root;
+    struct capref L1;
+    struct capref L2;
+    struct capref L3;
+    struct capref mapping;
 };
 
 

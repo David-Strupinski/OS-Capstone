@@ -45,7 +45,6 @@ static errval_t pt_alloc(struct paging_state *st, enum objtype type, struct capr
 
     assert(type == ObjType_VNode_AARCH64_l0 || type == ObjType_VNode_AARCH64_l1
            || type == ObjType_VNode_AARCH64_l2 || type == ObjType_VNode_AARCH64_l3);
-
     // try to get a slot from the slot allocator to hold the new page table
     err = st->slot_alloc->alloc(st->slot_alloc, ret);
     if (err_is_fail(err)) {
@@ -107,6 +106,24 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     
     // TODO: maybe use vnode_map() to map the first init process's page: cap_vroot
     //vnode_map();
+
+    st->root = cap_vroot;
+    //struct capref* mapping = NULL;//= slab_alloc(&(st->ma));
+    printf("before\n");
+    //st->L1 = slab_alloc(&(st->ma));
+    pt_alloc(st, ObjType_VNode_AARCH64_l1, &(st->mapping));
+    pt_alloc(st, ObjType_VNode_AARCH64_l1, &(st->L1));
+    printf("after\n");
+    // pt_alloc(st, ObjType_VNode_AARCH64_l1, st->L1);
+    // pt_alloc(st, ObjType_VNode_AARCH64_l1, st->L1);
+    errval_t err = vnode_map(cap_vroot, st->L1, VMSAv8_64_L0_INDEX(st->current_vaddr), VREGION_FLAGS_READ_WRITE, 0/*VMSAv8_64_L1_INDEX(0)*/, 1, st->mapping);
+    
+    if (err_is_fail(err)) {
+
+        printf("vnode_map failed %d\n", err);
+        return -1;
+    }
+    printf("vnode_map supposedly didn't fail\n");
     st->mappedPTs = rootMappedPT;
     st->mappedPTs->offset = 0;
     st->mappedPTs->cap = root;

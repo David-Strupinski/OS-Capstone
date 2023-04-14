@@ -112,6 +112,28 @@ static void free_one(struct mm *mem)
     grading_test_pass("A2-1", "free_one\n");
 }
 
+static void alloc_one_from_range(struct mm *mem, genpaddr_t base, genpaddr_t limit)
+{
+    errval_t err;
+
+    grading_printf("alloc_one_from_range(%zu)\n", BASE_PAGE_SIZE);
+
+    struct capref cap;
+    err = mm_alloc_from_range_aligned(mem, base, limit, BASE_PAGE_SIZE, BASE_PAGE_SIZE, &cap);
+    if (err_is_fail(err)) {
+        grading_test_fail("A10-1", "failed to allocate a single frame\n");
+        grading_printf("%s\n", err_getstring(err));
+        return;
+    }
+
+    if (!check_cap_size(cap, BASE_PAGE_SIZE)) {
+        grading_test_fail("A1-10", "cap check failed\n");
+        return;
+    }
+
+    grading_test_pass("A1-10", "allocate_one_from_range\n");
+}
+
 static void alloc_many(struct mm *mem)
 {
     grading_printf("alloc_many(%zu)\n", NUM_ALLOC);
@@ -141,7 +163,7 @@ static void free_many(struct mm *mem)
 {
     grading_printf("free_many(%zu)\n", NUM_ALLOC);
 
-    for (size_t i = 0; i < NUM_ALLOC; i++) {
+    for (int i = 0; i < NUM_ALLOC; i++) {
         errval_t err = mm_free(mem, allocated[i]);
         if (err_is_fail(err)) {
             grading_test_fail("A6-1", "failed to free a single frame\n");
@@ -152,6 +174,26 @@ static void free_many(struct mm *mem)
     }
 
     grading_test_pass("A6-1", "free_many\n");
+}
+
+static void free_many_reverse(struct mm *mem)
+{
+    grading_printf("free_many_reverse(%zu)\n", NUM_ALLOC);
+
+    grading_printf("running alloc_many...\n");
+    alloc_many(mem);
+
+    for (int i = NUM_ALLOC - 1; i >= 0; i--) {
+        errval_t err = mm_free(mem, allocated[i]);
+        if (err_is_fail(err)) {
+            grading_test_fail("A7-1", "failed to free a single frame\n");
+            return;
+        }
+
+        if (VERBOSE) grading_printf("freed %zu\n", i + 1);
+    }
+
+    grading_test_pass("A7-1", "free_many_reverse\n");
 }
 
 static void alloc_and_map(void)
@@ -192,8 +234,6 @@ static void partial_free(struct mm *mem)
 
     grading_printf("partial free\n");
 
-    mm_print_map(mem);
-
     struct capref cap;
     err = mm_alloc(mem, BASE_PAGE_SIZE * 8, &cap);
     if (err_is_fail(err)) {
@@ -205,8 +245,6 @@ static void partial_free(struct mm *mem)
         grading_test_fail("A5-1", "cap check failed\n");
         return;
     }
-
-    mm_print_map(mem);
 
     struct capref new;
     err = slot_alloc(&new);
@@ -227,9 +265,53 @@ static void partial_free(struct mm *mem)
         return;
     }
 
-    mm_print_map(mem);
-
     grading_test_pass("A5-1", "partial_free\n");
+}
+
+static void alloc_many_sizes(struct mm *mem)
+{
+    grading_printf("alloc_many_sizes(%zu)\n", 10);
+
+    for (size_t i = 0; i < 10; i++) {
+        struct capref cap;
+        errval_t err = mm_alloc(mem, BASE_PAGE_SIZE * i + 4, &cap);
+        if (err_is_fail(err)) {
+            grading_test_fail("A8-1", "failed to allocate a single frame\n");
+            return;
+        }
+
+        if (!check_cap_size(cap, BASE_PAGE_SIZE * i + 4)) {
+            grading_test_fail("A8-1", "cap check failed\n");
+            return;
+        }
+
+        if (VERBOSE) grading_printf("allocated %zu\n", i + 1);
+    }
+
+    grading_test_pass("A8-1", "allocate_many_sizes\n");
+}
+
+static void alloc_many_alignments(struct mm *mem)
+{
+    grading_printf("alloc_many_alignments(%zu)\n", 10);
+
+    for (size_t i = 0; i < 10; i++) {
+        struct capref cap;
+        errval_t err = mm_alloc_aligned(mem, BASE_PAGE_SIZE, BASE_PAGE_SIZE << i, &cap);
+        if (err_is_fail(err)) {
+            grading_test_fail("A9-1", "failed to allocate a single frame\n");
+            return;
+        }
+
+        if (!check_cap_size(cap, BASE_PAGE_SIZE)) {
+            grading_test_fail("A9-1", "cap check failed\n");
+            return;
+        }
+
+        if (VERBOSE) grading_printf("allocated %zu\n", i + 1);
+    }
+
+    grading_test_pass("A9-1", "allocate_many_alignments\n");
 }
 
 errval_t grading_run_tests_physical_memory(struct mm *mm)
@@ -250,21 +332,29 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     free_one(mm);
     if (PRINT_MAPS) mm_print_map(mm);
 
+    alloc_one_from_range(mm, 0x815c0000, 0x90000000);
+    if (PRINT_MAPS) mm_print_map(mm);
+
     alloc_many(mm);
     if (PRINT_MAPS) mm_print_map(mm);
 
     free_many(mm);
     if (PRINT_MAPS) mm_print_map(mm);
 
-    // TODO: free many reverse
+    free_many_reverse(mm);
+    if (PRINT_MAPS) mm_print_map(mm);
 
-    // TODO: run this test
-    if (false) alloc_and_map();
+    alloc_many_sizes(mm);
+    if (PRINT_MAPS) mm_print_map(mm);
+
+    alloc_many_alignments(mm);
+    if (PRINT_MAPS) mm_print_map(mm);
 
     partial_free(mm);
     if (PRINT_MAPS) mm_print_map(mm);
 
     // TODO: write more tests for mapping
+    if (false) alloc_and_map();
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 1 (Physical Memory Management)\n");

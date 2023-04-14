@@ -306,7 +306,7 @@ errval_t mm_alloc_from_range_aligned(struct mm *mm, size_t base, size_t limit, s
         return MM_ERR_OUT_OF_BOUNDS;
     }
     
-    size_t aligned_size = ROUND_UP(size, alignment);
+    size_t aligned_size = ROUND_UP(size, BASE_PAGE_SIZE);  //TODO: changed from alignment
 
     // check alignment input value (power of two starting at base page size)
     if (alignment < BASE_PAGE_SIZE) {
@@ -383,6 +383,8 @@ errval_t mm_alloc_from_range_aligned(struct mm *mm, size_t base, size_t limit, s
             }
             err = cap_retype(*retcap, curr->capability, aligned_offset, ObjType_RAM, aligned_size);
             if (err_is_fail(err)) {
+                debug_printf("retype error: size %d aligned size %d offset %p\n", size, aligned_size, aligned_offset);
+                debug_printf(err_getstring(err));
                 return MM_ERR_ALLOC_CONSTRAINTS;
             }
 

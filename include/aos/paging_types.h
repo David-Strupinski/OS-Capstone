@@ -66,7 +66,6 @@ struct paging_state {
     struct capref L1;
     struct capref L2;
     struct capref L3;
-    struct capref mapping;
 };
 
 

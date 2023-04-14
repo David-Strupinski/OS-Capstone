@@ -59,6 +59,8 @@ struct mm {
     enum objtype objtype;           ///< Type of capabilities stored
     size_t free_mem;                ///< Bytes of free memory
     size_t total_mem;               ///< Total number of bytes managed
+    genpaddr_t base;                ///< The lowest starting address of any chunk of memory
+    size_t limit;                   ///< The highest ending address of any chunk of memory
 };
 
 

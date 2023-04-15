@@ -89,6 +89,7 @@ __attribute__((unused)) static errval_t pt_alloc_l3(struct paging_state *st, str
 errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct capref root,
                            struct slot_allocator *ca)
 {
+    errval_t err;
     // TODO (M1):
     //  - Implement basic state struct initialization
     // TODO (M2):
@@ -109,16 +110,17 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
 
     // Map the L1 page table
     struct capref mapping;
-    errval_t err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
+    err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_SLOT_ALLOC);
     }
     pt_alloc(st, ObjType_VNode_AARCH64_l1, &(st->L1));
     err = vnode_map(st->root, st->L1, VMSAv8_64_L0_INDEX(st->current_vaddr), VREGION_FLAGS_READ_WRITE, 0, 1, mapping);
     if (err_is_fail(err)) {
-        printf("vnode_map failed mapping L1: %s\n", err_getstring(err));
+        printf("     vnode_map failed mapping L1: %s\n", err_getstring(err));
         return -1;
     }
+    //st->current_vaddr+=BASE_PAGE_SIZE;
 
     // Map the L2 page table
     struct capref mapping2;
@@ -129,9 +131,10 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     pt_alloc(st, ObjType_VNode_AARCH64_l2, &(st->L2));
     err = vnode_map(st->L1,   st->L2, VMSAv8_64_L1_INDEX(st->current_vaddr), VREGION_FLAGS_READ_WRITE, 0, 1, mapping2);
     if (err_is_fail(err)) {
-        printf("vnode_map failed mapping L2: %s\n", err_getstring(err));
+        printf("     vnode_map failed mapping L2: %s\n", err_getstring(err));
         return -1;
     }
+    //st->current_vaddr+=BASE_PAGE_SIZE;
 
     // Map the L3 page table
     struct capref mapping3;
@@ -142,11 +145,12 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     pt_alloc(st, ObjType_VNode_AARCH64_l3, &(st->L3));
     err = vnode_map(st->L2,   st->L3, VMSAv8_64_L2_INDEX(st->current_vaddr), VREGION_FLAGS_READ_WRITE, 0, 1, mapping3);
     if (err_is_fail(err)) {
-        printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
+        printf("     vnode_map failed mapping L3: %s\n", err_getstring(err));
         return -1;
     }
-    st->current_vaddr += BASE_PAGE_SIZE;
+    //st->current_vaddr+=BASE_PAGE_SIZE;
     
+    printf("     finished init\n");
     // TODO: keep track of our mappings
     // st->mappedPTs = rootMappedPT;
     // st->mappedPTs->offset = 0;
@@ -195,7 +199,7 @@ errval_t paging_init(void)
     // TIP: it might be a good idea to call paging_init_state() from here to
     // avoid code duplication.
     //struct capref root;  // TODO: replace placeholder?
-    paging_init_state(&current, SIZE_MAX / 4, cap_vroot, get_default_slot_allocator());
+    paging_init_state(&current, ((uint64_t)1)<<46, cap_vroot, get_default_slot_allocator());
     set_current_paging_state(&current);
     return SYS_ERR_OK;
 }
@@ -300,14 +304,13 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //
     // Hint:
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
-
-
+    
     struct capref mapping;
     errval_t err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_SLOT_ALLOC);
     }
-    pt_alloc(st, ObjType_VNode_AARCH64_l3, &(st->L3));
+    
     err = vnode_map(st->L3, frame, VMSAv8_64_L3_INDEX(st->current_vaddr), flags, offset, 1, mapping);
     if (err_is_fail(err)) {
         printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
@@ -315,62 +318,6 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     }
     *buf = (void*) st->current_vaddr;
     st->current_vaddr += bytes;
-
-
-
-
-
-
-
-
-    // verify we haven't already mapped the frame
-    // traverse through st->mappedPTs and compare the capref to the one passed in
-    // if it's already mapped, return an error
-    // while (st->mappedPTs != NULL) {
-    //     if (capcmp(st->mappedPTs->cap, frame) == 0 && offset == st->mappedPTs->offset) {
-    //         printf("frame already mapped\n");
-    //         //return LIB_ERR_FRAME_ALLOC;
-    //     }
-    //     st->mappedPTs = st->mappedPTs->next;
-    // }
-
-    // // map the frame
-    // struct capref mapping;
-    // struct slot_prealloc *ca = (struct slot_prealloc *)st->slot_alloc;
-    // errval_t err = slot_prealloc_refill(ca);
-    // if (err_is_fail(err)) {
-    //     printf("slot_prealloc_refill failed\n");
-    //     return err;
-    // }
-    // slot_prealloc_alloc(ca, &mapping);
-    // printf("made it here\n");
-    // // calculate frame capability offset
-    // if (offset % BASE_PAGE_SIZE != 0) {
-    //     printf("offset is not a multiple of BASE_PAGE_SIZE\n");
-    //     return LIB_ERR_FRAME_ALLOC;
-    // }
-    // err = vnode_map(cap_vroot, frame, st->current_vaddr, flags, VMSAv8_64_L3_INDEX(offset), 1, mapping);
-    // if (err_is_fail(err)) {
-    //     printf("vnode_map failed\n");
-    //     return err;
-    // }
-
-    // // return the virtual address of the created mapping through buf
-    // paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
-    
-    // // check if the mapping is valid
-    // if (get_cap_level(mapping) != ObjType_VNode_AARCH64_l3_Mapping) {
-    //     printf("mapping failed\n");
-    //     return LIB_ERR_FRAME_ALLOC;
-    // }
-
-    // // add the mapping to the list of mapped page tables
-    // // TODO: we need memory!!!!
-    // struct mappedPT newPT = {
-    //     .next = st->mappedPTs,
-    //     .cap = mapping,
-    // };
-    // st->mappedPTs = &newPT;
 
     // TODO(M2):
     // - General case: you will need to handle mappings spanning multiple leaf page tables.

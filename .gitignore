@@ -50,3 +50,6 @@ bin/
 .clang_complete
 compile_commands.json
 test-logs
+
+# serverboot
+tools/serverboot.sh

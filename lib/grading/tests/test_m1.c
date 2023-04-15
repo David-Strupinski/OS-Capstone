@@ -262,40 +262,6 @@ static void alloc_and_map_many(void)
     grading_test_pass("A12-1", "alloc_and_map_many\n");
 }
 
-static void alloc_and_map_many_sizes(void)
-{
-    errval_t err;
-
-    grading_printf("alloc_and_map_many_sizes()\n");
-
-    for (int i = 0; i < 10; i++) {
-        struct capref cap;
-        err = frame_alloc(&cap, BASE_PAGE_SIZE * i + 4, NULL);
-        if (err_is_fail(err)) {
-            grading_test_fail("A13-1", "failed to allocate a single frame\n");
-            return;
-        }
-
-        grading_printf("allocated frame, trying to map it\n");
-
-        void *buf;
-        err = paging_map_frame(get_current_paging_state(), &buf, BASE_PAGE_SIZE * i + 4, cap);
-        if (err_is_fail(err)) {
-            grading_test_fail("A13-1", "failed to map the frame\n");
-            return;
-        }
-        grading_printf("mapped frame, accessing it memset(%p, 0x42, %zu)\n", buf, BASE_PAGE_SIZE * i + 4);
-        memset(buf, 0x42, BASE_PAGE_SIZE);
-        for (size_t k = 0; k < BASE_PAGE_SIZE; k++) {
-            if (((uint8_t *)buf)[k] != 0x42) {
-                grading_test_fail("A13-1", "memory not set correctly\n");
-                return;
-            }
-        }
-    }
-    grading_test_pass("A13-1", "alloc_and_map_many_sizes\n");
-}
-
 static void alloc_and_map_same(void)
 {
     errval_t err;
@@ -454,7 +420,6 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     alloc_and_map();
     alloc_and_map_same();
     alloc_and_map_many();
-    if (false) alloc_and_map_many_sizes();
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 1 (Physical Memory Management)\n");

@@ -41,15 +41,30 @@
 
 typedef int paging_flags_t;
 
-struct mappedPT {
-    struct mappedPT *next;
+#define NUM_PT_SLOTS 512
+
+struct pageTable {
+    uint64_t numFree;
+    struct pageTable * parent;
+    struct capref self;
+    size_t offset;
+    size_t numBytes;
+    struct pageTable * children[NUM_PT_SLOTS];
+};
+
+struct mappedPTE {
+    struct mappedPTE *next;
     size_t offset;
     size_t numBytes;
     struct capref cap;
 };
 
-#define NUM_PTS_ALLOC 10
-
+#define NUM_PTS_ALLOC 1024
+#define VADDR_CALCULATE(L0, L1, L2, L3) (BASE_PAGE_SIZE*NUM_PT_SLOTS *NUM_PT_SLOTS *NUM_PT_SLOTS * (L0)) + (BASE_PAGE_SIZE * NUM_PT_SLOTS * NUM_PT_SLOTS * (L1)) + (BASE_PAGE_SIZE * NUM_PT_SLOTS * (L2)) + (BASE_PAGE_SIZE * (L3));
+#define INDEX_CALC_L0_FROM_VADDR(vaddr) ((vaddr)>>39)&(0b111111111)
+#define INDEX_CALC_L1_FROM_VADDR(vaddr) ((vaddr)>>30)&(0b111111111)
+#define INDEX_CALC_L2_FROM_VADDR(vaddr) ((vaddr)>>21)&(0b111111111)
+#define INDEX_CALC_L3_FROM_VADDR(vaddr) ((vaddr)>>12)&(0b111111111)
 /// struct to store the paging state of a process' virtual address space.
 struct paging_state {
     /// slot allocator to be used for this paging state
@@ -59,14 +74,11 @@ struct paging_state {
     /// addresses starting from `current_vaddr` are free
     /// TODO(M2): replace me with proper region management
     lvaddr_t current_vaddr;
-    struct mappedPT *mappedPTs;
+    struct mappedPTE *mappedPTEs;
     struct slab_allocator ma;       ///< Slab allocator for metadata
-    char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct mappedPT))];
+    char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable))];
 
-    struct capref root;
-    struct capref L1;
-    struct capref L2;
-    struct capref L3;
+    struct pageTable * root;
 };
 
 

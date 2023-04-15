@@ -127,11 +127,11 @@ static void alloc_one_from_range(struct mm *mem, genpaddr_t base, genpaddr_t lim
     }
 
     if (!check_cap_size(cap, BASE_PAGE_SIZE)) {
-        grading_test_fail("A1-10", "cap check failed\n");
+        grading_test_fail("A10-1", "cap check failed\n");
         return;
     }
 
-    grading_test_pass("A1-10", "allocate_one_from_range\n");
+    grading_test_pass("A10-1", "allocate_one_from_range\n");
 }
 
 static void alloc_many(struct mm *mem)
@@ -226,6 +226,70 @@ static void alloc_and_map(void)
         }
     }
     grading_test_pass("A4-1", "alloc_and_map\n");
+}
+
+static void alloc_and_map_many(void)
+{
+    errval_t err;
+
+    grading_printf("alloc_and_map_many()\n");
+
+    for (int i = 0; i < NUM_ALLOC; i++) {
+        struct capref cap;
+        err = frame_alloc(&cap, BASE_PAGE_SIZE, NULL);
+        if (err_is_fail(err)) {
+            grading_test_fail("A12-1", "failed to allocate a single frame\n");
+            return;
+        }
+
+        grading_printf("allocated frame, trying to map it\n");
+
+        void *buf;
+        err = paging_map_frame(get_current_paging_state(), &buf, BASE_PAGE_SIZE, cap);
+        if (err_is_fail(err)) {
+            grading_test_fail("A12-1", "failed to map the frame\n");
+            return;
+        }
+        grading_printf("mapped frame, accessing it memset(%p, 0x42, %zu)\n", buf, BASE_PAGE_SIZE);
+        memset(buf, 0x42, BASE_PAGE_SIZE);
+        for (size_t k = 0; k < BASE_PAGE_SIZE; k++) {
+            if (((uint8_t *)buf)[k] != 0x42) {
+                grading_test_fail("A12-1", "memory not set correctly\n");
+                return;
+            }
+        }
+    }
+    grading_test_pass("A12-1", "alloc_and_map_many\n");
+}
+
+static void alloc_and_map_same(void)
+{
+    errval_t err;
+
+    grading_printf("alloc_and_map_same()\n");
+
+    struct capref cap;
+    err = frame_alloc(&cap, BASE_PAGE_SIZE, NULL);
+    if (err_is_fail(err)) {
+        grading_test_fail("A13-1", "failed to allocate a single frame\n");
+        return;
+    }
+
+    grading_printf("allocated frame, trying to map it\n");
+
+    void *buf;
+    err = paging_map_frame(get_current_paging_state(), &buf, BASE_PAGE_SIZE, cap);
+    if (err_is_fail(err)) {
+        grading_test_fail("A13-1", "failed to map the initial frame\n");
+        return;
+    }
+    err = paging_map_frame(get_current_paging_state(), &buf, BASE_PAGE_SIZE, cap);
+    if (err_is_fail(err)) {
+        grading_test_pass("A13-1", "remapping frame failed successfully\n");
+        return;
+    }
+
+    grading_test_fail("A13-1", "alloc_and_map_same\n");
 }
 
 static void partial_free(struct mm *mem)
@@ -353,8 +417,10 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     if (false) partial_free(mm);
     if (PRINT_MAPS) mm_print_map(mm);
 
-    // TODO: write more tests for mapping
     alloc_and_map();
+    alloc_and_map_same();
+    if (false) alloc_and_map_many();
+    // TODO: alloc_and_map_many_sizes();
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 1 (Physical Memory Management)\n");

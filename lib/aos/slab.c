@@ -39,6 +39,7 @@ void slab_init(struct slab_allocator *slabs, size_t blocksize,
     slabs->slabs = NULL;
     slabs->blocksize = SLAB_REAL_BLOCKSIZE(blocksize);
     slabs->refill_func = refill_func;
+    slabs->refilling = false;
 }
 
 
@@ -214,12 +215,23 @@ errval_t slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref fr
     (void)frame_slot;
     (void)minbytes;
 
+    errval_t err;
     // TODO: Refill the slot allocator without causing a page-fault
-    /*errval_t err = mm_alloc_aligned(slabs->mem_manager, minbytes, BASE_PAGE_SIZE, &frame_slot);
+    size_t actualBytes;
+    err = frame_create(frame_slot, minbytes, &actualBytes);
     if (err_is_fail(err)) {
         return err;
-    }*/
-    return SYS_ERR_NOT_IMPLEMENTED;
+    }
+    
+    void * buf;
+    err = paging_map_frame_attr_offset(get_current_paging_state(), &buf, actualBytes, frame_slot, 0, VREGION_FLAGS_READ_WRITE);
+    if (err_is_fail(err)) {
+        return err;
+    }
+
+    slab_grow(slabs, buf, actualBytes);
+    
+    return SYS_ERR_OK;
 }
 
 /**
@@ -233,4 +245,14 @@ errval_t slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref fr
 errval_t slab_default_refill(struct slab_allocator *slabs)
 {
     return slab_refill_pages(slabs, BASE_PAGE_SIZE);
+}
+
+errval_t slab_check_and_refill(struct slab_allocator *slabs) {
+    errval_t err = SYS_ERR_OK;
+    if (slab_freecount(slabs) < 16 && !slabs->refilling) { 
+        slabs->refilling = true;
+        err = slab_default_refill(slabs);
+        slabs->refilling = false;
+    }
+    return err;
 }

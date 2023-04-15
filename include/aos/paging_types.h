@@ -44,10 +44,11 @@ typedef int paging_flags_t;
 struct mappedPT {
     struct mappedPT *next;
     size_t offset;
+    size_t numBytes;
     struct capref cap;
 };
 
-#define NUM_PTS_ALLOC 100
+#define NUM_PTS_ALLOC 10
 
 /// struct to store the paging state of a process' virtual address space.
 struct paging_state {

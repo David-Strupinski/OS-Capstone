@@ -38,7 +38,7 @@ struct slab_allocator {
     struct slab_head *slabs;    ///< Pointer to list of slabs
     size_t blocksize;           ///< Size of blocks managed by this allocator
     slab_refill_func_t refill_func;  ///< Refill function
-    //struct mm * mem_manager;             ///< this really should have a better solution
+    bool refilling;
 };
 
 void slab_init(struct slab_allocator *slabs, size_t blocksize,
@@ -50,6 +50,7 @@ size_t slab_freecount(struct slab_allocator *slabs);
 errval_t slab_default_refill(struct slab_allocator *slabs);
 errval_t slab_refill_no_pagefault(struct slab_allocator *slabs,
                                   struct capref frame, size_t minbytes);
+errval_t slab_check_and_refill(struct slab_allocator *slabs);
 
 // size of block header
 #define SLAB_BLOCK_HDRSIZE (sizeof(void *))

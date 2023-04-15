@@ -98,15 +98,13 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
 
     st->current_vaddr = start_vaddr;
     st->slot_alloc = ca;
+    st->root = root;
 
     // initialize a slab allocator to give us our memory
     // TODO: make this dynamic allocation, not static.
     slab_init(&st->ma, sizeof(struct mappedPT), NULL);
     slab_grow(&st->ma, st->slab_buf, SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct mappedPT)));
-    //struct mappedPT *rootMappedPT = slab_alloc(&(st->ma));
     
-
-    st->root = root;
 
     // Map the L1 page table
     struct capref mapping;
@@ -120,7 +118,6 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
         printf("     vnode_map failed mapping L1: %s\n", err_getstring(err));
         return -1;
     }
-    //st->current_vaddr+=BASE_PAGE_SIZE;
 
     // Map the L2 page table
     struct capref mapping2;
@@ -134,7 +131,6 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
         printf("     vnode_map failed mapping L2: %s\n", err_getstring(err));
         return -1;
     }
-    //st->current_vaddr+=BASE_PAGE_SIZE;
 
     // Map the L3 page table
     struct capref mapping3;
@@ -148,14 +144,6 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
         printf("     vnode_map failed mapping L3: %s\n", err_getstring(err));
         return -1;
     }
-    //st->current_vaddr+=BASE_PAGE_SIZE;
-    
-    printf("     finished init\n");
-    // TODO: keep track of our mappings
-    // st->mappedPTs = rootMappedPT;
-    // st->mappedPTs->offset = 0;
-    // st->mappedPTs->cap = root;
-    // st->mappedPTs->next = NULL;
 
     return SYS_ERR_OK;
 }
@@ -304,7 +292,14 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //
     // Hint:
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
-    
+    struct mappedPT *curr = st->mappedPTs;
+    while (curr != NULL) {              // overlapping back
+        if (capcmp(frame, curr->cap) && !((offset + bytes < curr->offset) || (offset > curr->offset + curr->numBytes))) {
+            printf("they're the same\n");
+            return -1;
+        }
+        curr = curr->next;
+    }
     struct capref mapping;
     errval_t err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
     if (err_is_fail(err)) {
@@ -318,6 +313,14 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     }
     *buf = (void*) st->current_vaddr;
     st->current_vaddr += bytes;
+    slab_check_and_refill(&(st->ma));
+    struct mappedPT *new = slab_alloc(&(st->ma));
+    
+    new->cap = frame;
+    new->next = st->mappedPTs;
+    new->offset = offset;
+    new->numBytes = bytes;
+    st->mappedPTs = new;
 
     // TODO(M2):
     // - General case: you will need to handle mappings spanning multiple leaf page tables.

@@ -136,6 +136,7 @@ errval_t mm_add(struct mm *mm, struct capref cap)
         curr = curr->next;
     }
 
+    slab_check_and_refill(&(mm->ma));
     // allocate a slab for metadata
     struct metadata *cap_metadata = slab_alloc(&(mm->ma));
     if (cap_metadata == NULL) {
@@ -182,6 +183,7 @@ errval_t mm_add(struct mm *mm, struct capref cap)
  */
 static errval_t mm_split_beginning(struct mm *mm, struct metadata *node, size_t size, bool used) {
     // allocate space for the new node and set the fields
+    slab_check_and_refill(&(mm->ma));
     struct metadata *splitoff = slab_alloc(&(mm->ma));
     if (splitoff == NULL) {
         return MM_ERR_SLAB_ALLOC_FAIL;
@@ -221,6 +223,7 @@ static errval_t mm_split_beginning(struct mm *mm, struct metadata *node, size_t 
  */
 static errval_t mm_split_end(struct mm *mm, struct metadata *node, size_t size, bool used) {
     // allocate space for the new node and set the fields
+    slab_check_and_refill(&(mm->ma));
     struct metadata *splitoff = slab_alloc(&(mm->ma));
     if (splitoff == NULL) {
         return MM_ERR_SLAB_ALLOC_FAIL;
@@ -321,6 +324,7 @@ errval_t mm_alloc_from_range_aligned(struct mm *mm, size_t base, size_t limit, s
         return MM_ERR_OUT_OF_MEMORY;
     }
 
+    slab_check_and_refill(&(mm->ma));
     // traverse the metadata list looking for a free space
     for (struct metadata * curr = mm->freelist; curr != NULL; curr = curr->next) {
         // determine the required alignment and skip this node if it is too great
@@ -340,16 +344,6 @@ errval_t mm_alloc_from_range_aligned(struct mm *mm, size_t base, size_t limit, s
         // compute the required base and size, allocating this node if everything fits
         size_t potential_size = curr->size - alignment_offset;
         if (curr->used == false && potential_size >= aligned_size && potential_size >= BASE_PAGE_SIZE) {
-            // refill the slab allocator if necessary
-            if (slab_freecount(&(mm->ma)) < 16) { //!mm->currentlyRefillingSA) {
-                // TODO: refill the slab allocator
-                //mm->currentlyRefillingSA = true;
-                //mm->ma.mem_manager = mm;
-                //slab_default_refill(&(mm->ma));
-                //mm->ma.mem_manager = NULL;
-                //mm->currentlyRefillingSA = false;
-            }
-
             // split a node if there is enough space but the alignment is not correct
             if (alignment_offset > 0) {
                 errval_t err = mm_split_beginning(mm, curr, alignment_offset, false);

@@ -41,7 +41,7 @@
 
 typedef int paging_flags_t;
 
-#define NUM_PT_SLOTS 64
+#define NUM_PT_SLOTS 512
 
 struct pageTable {
     uint64_t numFree;
@@ -79,6 +79,10 @@ struct paging_state {
     char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable))];
 
     struct pageTable * root;
+    struct capref oldRoot;
+    struct capref L1;
+    struct capref L2;
+    struct capref L3;
 };
 
 

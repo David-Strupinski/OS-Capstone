@@ -42,7 +42,7 @@ struct metadata {
     genpaddr_t capability_base;  // the base address of the original capability
 };
 
-#define NumStructAlloc 10
+#define NumStructAlloc 1024
 
 /**
  * @brief Memory manager instance data

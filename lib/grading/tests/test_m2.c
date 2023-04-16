@@ -208,7 +208,7 @@ errval_t grading_run_tests_virtual_memory(bool early)
     (void)early;
 
     if (grading_options.m2_subtest_run == 0) {
-        return SYS_ERR_OK;
+        //return SYS_ERR_OK;
     }
 
     // run them on core 0 only, core 1 tests come in M5

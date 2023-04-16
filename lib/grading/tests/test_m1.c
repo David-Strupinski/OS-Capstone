@@ -387,7 +387,7 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     grading_printf("#################################################\n");
     grading_printf("# TESTS: Milestone 1 (Physical Memory Management)\n");
     grading_printf("#################################################\n");
-
+    if (true) {
     if (PRINT_MAPS) mm_print_map(mm);
 
     alloc_one(mm);
@@ -420,7 +420,7 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     alloc_and_map();
     alloc_and_map_same();
     alloc_and_map_many();
-
+    }
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 1 (Physical Memory Management)\n");
     grading_printf("#################################################\n");

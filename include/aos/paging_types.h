@@ -41,7 +41,7 @@
 
 typedef int paging_flags_t;
 
-#define NUM_PT_SLOTS 512
+#define NUM_PT_SLOTS 64
 
 struct pageTable {
     uint64_t numFree;
@@ -61,10 +61,10 @@ struct mappedPTE {
 
 #define NUM_PTS_ALLOC 1024
 #define VADDR_CALCULATE(L0, L1, L2, L3) (BASE_PAGE_SIZE*NUM_PT_SLOTS *NUM_PT_SLOTS *NUM_PT_SLOTS * (L0)) + (BASE_PAGE_SIZE * NUM_PT_SLOTS * NUM_PT_SLOTS * (L1)) + (BASE_PAGE_SIZE * NUM_PT_SLOTS * (L2)) + (BASE_PAGE_SIZE * (L3));
-#define INDEX_CALC_L0_FROM_VADDR(vaddr) ((vaddr)>>39)&(0b111111111)
-#define INDEX_CALC_L1_FROM_VADDR(vaddr) ((vaddr)>>30)&(0b111111111)
-#define INDEX_CALC_L2_FROM_VADDR(vaddr) ((vaddr)>>21)&(0b111111111)
-#define INDEX_CALC_L3_FROM_VADDR(vaddr) ((vaddr)>>12)&(0b111111111)
+// #define VMSAv8_64_L0_INDEX(vaddr) ((vaddr)>>39)&(0b111111111)
+// #define VMSAv8_64_L1_INDEX(vaddr) ((vaddr)>>30)&(0b111111111)
+// #define VMSAv8_64_L2_INDEX(vaddr) ((vaddr)>>21)&(0b111111111)
+// #define VMSAv8_64_L3_INDEX(vaddr) ((vaddr)>>12)&(0b111111111)
 /// struct to store the paging state of a process' virtual address space.
 struct paging_state {
     /// slot allocator to be used for this paging state

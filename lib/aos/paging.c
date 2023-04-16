@@ -95,33 +95,27 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     // TODO (M2):
     //  -  Implement page fault handler that installs frames when a page fault
     //     occurs and keeps track of the virtual address space.
-    printf("got here 2---------------------------------------------------------------------------------\n");
     st->current_vaddr = start_vaddr;
     st->slot_alloc = ca;
    
-printf("got here 5---------------------------------------------------------------------------------\n");
     // initialize a slab allocator to give us our memory
     // TODO: make this dynamic allocation, not static.
     slab_init(&st->ma, sizeof(struct pageTable), NULL);
-    printf("got here 6---------------------------------------------------------------------------------\n");
     slab_grow(&st->ma, st->slab_buf, SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable)));
-    printf("got here 3---------------------------------------------------------------------------------\n");
     // err = slab_check_and_refill(&(st->ma));
     // if (err_is_fail(err)) {
     //     return err;
     // }
     struct pageTable *pt = slab_alloc(&(st->ma));
-    printf("got here 4---------------------------------------------------------------------------------\n");
     pt->offset = 0;
     pt->self = root;
     pt->numFree = NUM_PT_SLOTS;
     pt->parent = NULL;
-    printf("got here 1---------------------------------------------------------------------------------\n");
     for (int i = 0; i < NUM_PT_SLOTS; i++) {
         pt->children[i] = NULL;
     }
     st->root = pt;
-
+    printf("made it the othe enfdnapoind plkj\n");
     // // Map the L1 page table
     // struct capref mapping;
     // err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
@@ -316,128 +310,176 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //     }
     //     curr = curr->next;
     // }
-    //struct capref L3;
+
+    // TODO: detect duplicate capref mappings
+    errval_t err;
     (void) st;
     (void) buf;
     (void) bytes;
     (void) frame;
     (void) offset;
     (void) flags;
-    
-    //size_t numPTEs = ROUND_UP(bytes, BASE_PAGE_SIZE)/BASE_PAGE_SIZE;
-    
-    genvaddr_t vaddr = VADDR_CALCULATE(128, 35, 0, 511);
-    printf("is this 128: %d\n",INDEX_CALC_L0_FROM_VADDR(vaddr));
-    printf("is this  35: %d\n",INDEX_CALC_L1_FROM_VADDR(vaddr));
-    printf("is this   0: %d\n",INDEX_CALC_L2_FROM_VADDR(vaddr));
-    printf("is this 511: %d\n",INDEX_CALC_L3_FROM_VADDR(vaddr));
+        
+    genvaddr_t vaddr = ((uint64_t)1)<<46;// VADDR_CALCULATE(128, 0, 0, 0);
     size_t space = 0;
     genvaddr_t currentL0 = 128;
     genvaddr_t currentL1 = 0;
     genvaddr_t currentL2 = 0;
     genvaddr_t currentL3 = 0;
-    genvaddr_t startL0 = 128;
-    genvaddr_t startL1 = 0;
-    genvaddr_t startL2 = 0;
-    genvaddr_t startL3 = 0;
-    for (currentL0 = 128; currentL0 < NUM_PT_SLOTS; currentL0++) {
-        if (space >= bytes) {
-            break;
-        }
-        if (st->root->children[currentL0] == NULL) {
-            // full space
-            space = space + (BASE_PAGE_SIZE * NUM_PT_SLOTS * NUM_PT_SLOTS * NUM_PT_SLOTS);            
+
+    bool resetVaddr = false;
+    while (space < bytes) {
+        if (st->root->children[currentL0] == NULL ||
+            st->root->children[currentL0]->children[currentL1] == NULL || 
+            st->root->children[currentL0]->children[currentL1]->children[currentL2] == NULL ||
+            st->root->children[currentL0]->children[currentL1]->children[currentL2]->children[currentL3] == NULL) {
+            
+            space = space + BASE_PAGE_SIZE;         
         } else {
-            for (currentL1 = 0; currentL1 < NUM_PT_SLOTS; currentL1++) {
-                if (space >= bytes) {
-                    break;
-                }
-                if (st->root->children[currentL0]->children[currentL1] == NULL) {
-                    // full space
-                    space = space + (BASE_PAGE_SIZE * NUM_PT_SLOTS * NUM_PT_SLOTS);
-                } else {                                        
-                    for (currentL2 = 0; currentL2 < NUM_PT_SLOTS; currentL2++) {
-                        if (space >= bytes) {
-                            break;
-                        }
-                        if (st->root->children[currentL0]->children[currentL1]->children[currentL2] == NULL) {
-                            space = space + (BASE_PAGE_SIZE * NUM_PT_SLOTS);
-                        } else {
-                            for (currentL3 = 0; currentL3 < NUM_PT_SLOTS; currentL3++) {
-                                if (space >= bytes) {
-                                    break;
-                                }
-                                if (st->root->children[currentL0]->children[currentL1]->children[currentL2]->children[currentL3] == NULL) {
-                                    space = space + BASE_PAGE_SIZE;
-                                } else {
-                                    space = 0;
-                                    
-                                    startL0 = currentL0;
-                                    startL1 = currentL1;
-                                    startL2 = currentL2;
-                                    startL3 = currentL3 + 1;
-                                    if (startL3 > 512) {
-                                        startL3 = 0;
-                                        startL2 = startL2 + 1;
-                                    }
-                                    if (startL2 > 512) {
-                                        startL2 = 0;
-                                         
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            resetVaddr = true;
+        }
+        currentL3++;
+        if (currentL3 >= NUM_PT_SLOTS) {
+            currentL3 = 0;
+            currentL2++;
+        }
+        if (currentL2 >= NUM_PT_SLOTS) {
+            currentL2 = 0;
+            currentL1++;
+        }
+        if (currentL1 >= NUM_PT_SLOTS) {
+            currentL1 = 0;
+            currentL0++;
+        }
+        if (currentL0 >= NUM_PT_SLOTS) {
+            return -1;
+        }
+        if (resetVaddr) {
+            resetVaddr = false;
+            vaddr = VADDR_CALCULATE(currentL0, currentL1, currentL2, currentL3);
+            space = 0;
         }
     }
 
+    size_t test_offset = 0;
+    genvaddr_t finalVaddr = vaddr;
+    int numPages = bytes/4096;
+    while (numPages > 0) {
+        slab_check_and_refill(&(st->ma));
+        if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)] == NULL) {
+            struct capref mapping;
+            err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
+            if (err_is_fail(err)) {
+                printf("ooh noo\n");
+                return -1;
+            }
+            struct capref newL1;
+            pt_alloc(st, ObjType_VNode_AARCH64_l1, &newL1);
+            
+            struct pageTable * newPt = (struct pageTable *)slab_alloc(&(st->ma));
+            st->root->children[VMSAv8_64_L0_INDEX(vaddr)] = newPt;
+            newPt->self = newL1;
 
-    vaddr = VADDR_CALCULATE(startL0, startL1, startL2, startL3);
-
-
-
-    for (currentL0 = 128; currentL0 < NUM_PT_SLOTS; currentL0++) {
-        if (space >= bytes) {
-            break;
-        }
-        if (st->root->children[currentL0] == NULL) {
-            // full space
-            space = space + (BASE_PAGE_SIZE * NUM_PT_SLOTS * NUM_PT_SLOTS * NUM_PT_SLOTS);            
-        } else {
-            for (currentL1 = 0; currentL1 < NUM_PT_SLOTS; currentL1++) {
-                if (space >= bytes) {
-                    break;
-                }
-                if (st->root->children[currentL0]->children[currentL1] == NULL) {
-                    // full space
-                    space = space + (BASE_PAGE_SIZE * NUM_PT_SLOTS * NUM_PT_SLOTS);
-                } else {                                        
-                    for (currentL2 = 0; currentL2 < NUM_PT_SLOTS; currentL2++) {
-                        if (space >= bytes) {
-                            break;
-                        }
-                        if (st->root->children[currentL0]->children[currentL1]->children[currentL2] == NULL) {
-                            space = space + (BASE_PAGE_SIZE * NUM_PT_SLOTS);
-                        } else {
-                            for (currentL3 = 0; currentL3 < NUM_PT_SLOTS; currentL3++) {
-                                if (space >= bytes) {
-                                    break;
-                                }
-                                if (st->root->children[currentL0]->children[currentL1]->children[currentL2]->children[currentL3] == NULL) {
-                                    space = space + BASE_PAGE_SIZE;
-                                } else {
-                                    space = 0;
-                                    vaddr = VADDR_CALCULATE(currentL0, currentL1, currentL2, currentL3 + 1);
-                                }
-                            }
-                        }
-                    }
-                }
+            err = vnode_map(st->root->self, newL1, VMSAv8_64_L0_INDEX(vaddr), VREGION_FLAGS_READ_WRITE, 0, 1, mapping);
+            if (err_is_fail(err)) {
+                printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
             }
         }
+        if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)] == NULL) {
+            struct capref mapping;
+            err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
+            if (err_is_fail(err)) {
+                printf("ooh noo\n");
+                return -1;
+            }
+            struct capref newL2;
+            pt_alloc(st, ObjType_VNode_AARCH64_l2, &newL2);
+
+            struct pageTable * newPt = (struct pageTable *)slab_alloc(&(st->ma));
+            st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)] = newPt;
+            newPt->self = newL2;
+
+            err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->self, newL2, VMSAv8_64_L0_INDEX(vaddr),
+                      VREGION_FLAGS_READ_WRITE, 0, 1, mapping);
+            if (err_is_fail(err)) {
+                printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
+            }
+        }
+            
+
+        if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                      children[VMSAv8_64_L1_INDEX(vaddr)]->
+                      children[VMSAv8_64_L2_INDEX(vaddr)] == NULL) {
+            
+            struct capref mapping;
+            err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
+            if (err_is_fail(err)) {
+                printf("ooh noo\n");
+                return -1;
+            }
+            struct capref newL3;
+            pt_alloc(st, ObjType_VNode_AARCH64_l3, &newL3);
+
+            struct pageTable * newPt = (struct pageTable *)slab_alloc(&(st->ma));
+            st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                      children[VMSAv8_64_L1_INDEX(vaddr)]->
+                      children[VMSAv8_64_L2_INDEX(vaddr)] = newPt;
+            newPt->self = newL3;
+
+            err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                                children[VMSAv8_64_L1_INDEX(vaddr)]->self, newL3, 
+                                VMSAv8_64_L2_INDEX(vaddr), VREGION_FLAGS_READ_WRITE, 0, 1, mapping);
+            if (err_is_fail(err)) {
+                printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
+            }
+        }
+        
+        if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                      children[VMSAv8_64_L1_INDEX(vaddr)]->
+                      children[VMSAv8_64_L2_INDEX(vaddr)]->
+                      children[VMSAv8_64_L3_INDEX(vaddr)] == NULL) {
+
+            struct capref mapping;
+            err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
+            if (err_is_fail(err)) {
+                printf("ooh noo\n");
+                return -1;
+            }
+            
+            struct pageTable * newPt = (struct pageTable *)slab_alloc(&(st->ma));
+            st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                      children[VMSAv8_64_L1_INDEX(vaddr)]->
+                      children[VMSAv8_64_L2_INDEX(vaddr)]->
+                      children[VMSAv8_64_L3_INDEX(vaddr)] = newPt;
+            newPt->self = frame;
+            printf("made it to 2.5 *************************************************************************\n");
+            // printf("L0: %d\n", VMSAv8_64_L0_INDEX(vaddr));
+            // printf("L1: %d\n", VMSAv8_64_L1_INDEX(vaddr));
+            // printf("L2: %d\n", VMSAv8_64_L2_INDEX(vaddr));
+            // printf("L3: %d\n", VMSAv8_64_L3_INDEX(vaddr));
+            printf("vaddr: %p\n", vaddr);
+            err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                                children[VMSAv8_64_L1_INDEX(vaddr)]->
+                                children[VMSAv8_64_L2_INDEX(vaddr)]->
+                                /*children[VMSAv8_64_L3_INDEX(vaddr)]->*/self, frame, 
+                                VMSAv8_64_L3_INDEX(vaddr), VREGION_FLAGS_READ_WRITE, 0, 1, mapping);
+            if (err_is_fail(err)) {
+                printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
+            }
+            printf("no fail\n");
+        }
+        printf("got to 4\n");
+        printf("space: %lli\n", space);
+        space = space - BASE_PAGE_SIZE;
+        vaddr = vaddr + BASE_PAGE_SIZE;
+        test_offset = test_offset + BASE_PAGE_SIZE;
+        numPages--;
     }
+    printf("finalVaddr %p\n", finalVaddr);
+    *buf = (void*) finalVaddr;
+    
+    
+    printf("made it to 3 *************************************************************************\n");
 
 
 

@@ -427,7 +427,7 @@ errval_t grading_run_tests_physical_memory(struct mm *mm)
     grading_printf("# DONE:  Milestone 1 (Physical Memory Management)\n");
     grading_printf("#################################################\n");
 
-    grading_stop();
+    //grading_stop();
 
     return SYS_ERR_OK;
 }

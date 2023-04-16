@@ -112,7 +112,7 @@ errval_t morecore_init(size_t alignment)
 
 
 // dynamic heap using lib/aos/paging features
-
+// TODO: alloc dynamic heap here
 
 /**
  * @brief Morecore memory allocator to back the heap region with dynamically allocated memory
@@ -168,6 +168,16 @@ static void morecore_free(void *base, size_t bytes)
 errval_t morecore_init(size_t alignment)
 {
     (void)alignment;
+
+    struct morecore_state *state = get_morecore_state();
+
+    debug_printf("initializing dynamic heap\n");
+
+    thread_mutex_init(&state->mutex);
+
+    // TODO: initialize the free pointer with the start of the heap
+    // state->freep = NULL;
+
     sys_morecore_alloc = morecore_alloc;
     sys_morecore_free = morecore_free;
     //USER_PANIC("NYI: implement me\n");

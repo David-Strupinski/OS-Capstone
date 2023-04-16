@@ -31,7 +31,7 @@ extern morecore_free_func_t sys_morecore_free;
 // This define enables the use of a static 16MB mini heap in the data section.
 //
 // TODO (M2): disable this define and implement a dynamic heap allocator
-#define USE_STATIC_HEAP
+// #define USE_STATIC_HEAP
 
 
 #ifdef USE_STATIC_HEAP
@@ -134,12 +134,13 @@ errval_t morecore_init(size_t alignment)
  */
 static void *morecore_alloc(size_t bytes, size_t *retbytes)
 {
-    // make compiler happy about unused parameters
-    (void)bytes;
-    (void)retbytes;
+    void *buf = NULL;
+    bytes = ROUND_UP(bytes, BASE_PAGE_SIZE);
+    struct paging_state *st = get_current_paging_state();
 
-    USER_PANIC("NYI: implement me\n");
-    return NULL;
+    paging_alloc(st, &buf, bytes, BASE_PAGE_SIZE);
+
+    *retbytes = bytes;
 }
 
 /**

@@ -457,8 +457,8 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
                                   children[VMSAv8_64_L2_INDEX(vaddr)]->self, frame, 
-                                  VMSAv8_64_L3_INDEX(vaddr), VREGION_FLAGS_READ_WRITE, 
-                                  offset + i * NUM_PT_SLOTS * BASE_PAGE_SIZE, numMapped, mapping);
+                                  VMSAv8_64_L3_INDEX(vaddr + i * NUM_PT_SLOTS *BASE_PAGE_SIZE) , VREGION_FLAGS_READ_WRITE, 
+                                  offset, numMapped, mapping);
         if (err_is_fail(err)) {
             printf("\n");
             //printf("mapping leaf: iteration: %d --------------------------------------\n", j);

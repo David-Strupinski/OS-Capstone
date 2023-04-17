@@ -308,6 +308,8 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
     }
     pt_alloc(st, type, 
                 &(parent->children[slot]->self));
+
+    
     err = vnode_map(parent->self, parent->children[slot]->self, 
                     slot, VREGION_FLAGS_READ_WRITE, offset, pte_ct, mapping);
     if (err_is_fail(err)) {
@@ -425,13 +427,13 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     // Hint:
     //  - think about what mapping configurations are actually possible
     //
-
-
+    
+    //printf("vaddr: %p-----------------------------------\n", (uint64_t*) vaddr);
+    
     int numPages = ROUND_UP(bytes, BASE_PAGE_SIZE)/ BASE_PAGE_SIZE;
     errval_t err;
-
-    for (int j = 0; j < numPages; j++) {
-
+    
+        //printf("vaddr: %p-----------------------------------\n", (uint64_t*) vaddr);
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]==NULL) {     
             mapNewPT(st, VMSAv8_64_L0_INDEX(vaddr), 0, 1, ObjType_VNode_AARCH64_l1, st->root);
         }
@@ -452,22 +454,25 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         if (err_is_fail(err)) {
             return err_push(err, LIB_ERR_SLOT_ALLOC);
         }
-        
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
                                   children[VMSAv8_64_L2_INDEX(vaddr)]->self, frame, 
                                   VMSAv8_64_L3_INDEX(vaddr), VREGION_FLAGS_READ_WRITE, 
-                                  0, 1, mapping);
+                                  offset, numPages, mapping);
         if (err_is_fail(err)) {
+            printf("\n");
+            //printf("mapping leaf: iteration: %d --------------------------------------\n", j);
             printf("vnode_map failed mapping L3: %s\n", err_getstring(err));
+            printf("\n");
             return -1;
         }
+        
         st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                   children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)] 
                   = (void*) 1;
+        
         vaddr = vaddr + BASE_PAGE_SIZE;
-    }
-
+    
     return SYS_ERR_OK;
 }
 

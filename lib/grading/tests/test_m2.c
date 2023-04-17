@@ -35,7 +35,7 @@
 
 
 /// framesize to be 5 MB
-#define FRAME_SIZE      (5 << 20)
+#define FRAME_SIZE      BASE_PAGE_SIZE * 512//(5 << 20)
 #define NUM_MAPS        16
 #define FIXED_ADDRESS   (32ULL << 40)
 #define HEAP_ALLOC_SIZE (256 << 20)
@@ -136,7 +136,7 @@ static void alloc_and_map_fixed(void)
 {
     errval_t err;
 
-    grading_printf("alloc_and_map_fixed(%lx, %zu)\n", FIXED_ADDRESS, BASE_PAGE_SIZE);
+    grading_printf("alloc_and_map_fixed(%lx, %zu)\n", FIXED_ADDRESS, FRAME_SIZE);
 
     struct capref cap;
     err = frame_alloc(&cap, FRAME_SIZE, NULL);

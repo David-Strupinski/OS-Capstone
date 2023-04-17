@@ -31,7 +31,7 @@ extern morecore_free_func_t sys_morecore_free;
 // This define enables the use of a static 16MB mini heap in the data section.
 //
 // TODO (M2): disable this define and implement a dynamic heap allocator
- #define USE_STATIC_HEAP
+//  #define USE_STATIC_HEAP
 
 
 #ifdef USE_STATIC_HEAP
@@ -110,9 +110,8 @@ errval_t morecore_init(size_t alignment)
 
 #else /* !USE_STATIC_HEAP */
 
-
-// dynamic heap using lib/aos/paging features
-// TODO: alloc dynamic heap here
+// Size of the starting heap
+#define HEAP_SIZE (256<<20)
 
 /**
  * @brief Morecore memory allocator to back the heap region with dynamically allocated memory
@@ -134,11 +133,8 @@ errval_t morecore_init(size_t alignment)
  */
 static void *morecore_alloc(size_t bytes, size_t *retbytes)
 {
-    void *buf = NULL;
+    debug_printf("hi\n");
     bytes = ROUND_UP(bytes, BASE_PAGE_SIZE);
-    struct paging_state *st = get_current_paging_state();
-
-    paging_alloc(st, &buf, bytes, BASE_PAGE_SIZE);
 
     *retbytes = bytes;
     return NULL;
@@ -167,7 +163,10 @@ static void morecore_free(void *base, size_t bytes)
  */
 errval_t morecore_init(size_t alignment)
 {
-    (void)alignment;
+    void *buf = NULL;
+    struct paging_state *st = get_current_paging_state();
+
+    paging_alloc(st, &buf, HEAP_SIZE, alignment);
 
     struct morecore_state *state = get_morecore_state();
 
@@ -175,12 +174,12 @@ errval_t morecore_init(size_t alignment)
 
     thread_mutex_init(&state->mutex);
 
-    // TODO: initialize the free pointer with the start of the heap
-    // state->freep = NULL;
+    state->freep = buf;
+    debug_printf("vaddr_start: %lx\n", (int64_t) buf);
 
     sys_morecore_alloc = morecore_alloc;
     sys_morecore_free = morecore_free;
-    //USER_PANIC("NYI: implement me\n");
+
     return SYS_ERR_OK;
 }
 

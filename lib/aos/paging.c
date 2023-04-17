@@ -196,9 +196,7 @@ errval_t paging_init_onthread(struct thread *t)
 
     // TODO (M2):
     //   - setup exception handler for thread `t'.
-    for (int i = 0; i < 100; i++){
-        printf("paging_init_on_thread\n");
-    }
+
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 
@@ -227,7 +225,7 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
     size_t aligned_bytes = ROUND_UP(bytes, alignment);
 
     genvaddr_t vaddr = VADDR_CALCULATE(NUM_PT_SLOTS/4, 0, 0, 0, 0);
-    printf("vaddr calculate: %p\n", vaddr);
+    // printf("vaddr calculate: %p\n", vaddr);
     size_t space = 0;
     genvaddr_t currentL0 = NUM_PT_SLOTS/4;
     genvaddr_t currentL1 = 0;
@@ -344,7 +342,7 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     genvaddr_t vaddr = (genvaddr_t)*buf;
     if (offset != 0) {
         for (int i = 0; i < 100; i++) {
-            printf("offset check: %d------------------------------------------------------------------\n", offset);
+            // printf("offset check: %d------------------------------------------------------------------\n", offset);
         }
     }
     errval_t err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
@@ -440,13 +438,13 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
        
         numMapped = MIN((int)(NUM_PT_SLOTS - VMSAv8_64_L3_INDEX(vaddr)), numPages);
-        printf("numPages:  %d\n", numPages);
-        printf("numMapped: %d\n", numMapped);
+        // printf("numPages:  %d\n", numPages);
+        // printf("numMapped: %d\n", numMapped);
         // printf("vaddr: %p\n", vaddr);
         // printf("i: %d, l1 index: %d\n", i, VMSAv8_64_L1_INDEX(vaddr));
         // printf("i: %d, l2 index: %d\n", i, VMSAv8_64_L2_INDEX(vaddr));
         // printf("i: %d, l3 index: %d\n", i, VMSAv8_64_L3_INDEX(vaddr));
-        printf("offset: %p\n", offset + NUM_PT_SLOTS * BASE_PAGE_SIZE * i);
+        // printf("offset: %p\n", offset + NUM_PT_SLOTS * BASE_PAGE_SIZE * i);
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
                                   children[VMSAv8_64_L2_INDEX(vaddr)]->self, frame,

@@ -35,7 +35,7 @@
 
 
 /// framesize to be 5 MB
-#define FRAME_SIZE      (5 << 20)
+#define FRAME_SIZE      BASE_PAGE_SIZE * 1024 //(5 << 20)
 #define NUM_MAPS        16
 #define FIXED_ADDRESS   (32ULL << 40)
 #define HEAP_ALLOC_SIZE (256 << 20)

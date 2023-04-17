@@ -313,7 +313,7 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
     err = vnode_map(parent->self, parent->children[slot]->self, 
                     slot, VREGION_FLAGS_READ_WRITE, offset, pte_ct, mapping);
     if (err_is_fail(err)) {
-        printf("     vnode_map failed mapping L1: %s\n", err_getstring(err));
+        printf("     vnode_map failed mapping: %s\n", err_getstring(err));
         return -1;
     }
 
@@ -433,16 +433,16 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     int numMapped;
     for (int i = 0; numPages > 0; i++) {
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]==NULL) {     
-            mapNewPT(st, VMSAv8_64_L0_INDEX(vaddr), 0, 1, ObjType_VNode_AARCH64_l1, st->root);
+            mapNewPT(st, VMSAv8_64_L0_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l1, st->root);
         }
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                       children[VMSAv8_64_L1_INDEX(vaddr)] == NULL) {
-            mapNewPT(st, VMSAv8_64_L1_INDEX(vaddr), 0, 1, ObjType_VNode_AARCH64_l2, 
+            mapNewPT(st, VMSAv8_64_L1_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l2, 
                      st->root->children[VMSAv8_64_L0_INDEX(vaddr)]);
         }
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                       children[VMSAv8_64_L2_INDEX(vaddr)] == NULL) {
-            mapNewPT(st, VMSAv8_64_L2_INDEX(vaddr), 0, 1, ObjType_VNode_AARCH64_l3, 
+            mapNewPT(st, VMSAv8_64_L2_INDEX(vaddr), offset , 1, ObjType_VNode_AARCH64_l3, 
                      st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                children[VMSAv8_64_L1_INDEX(vaddr)]);
         }
@@ -458,7 +458,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
                                   children[VMSAv8_64_L2_INDEX(vaddr)]->self, frame, 
                                   VMSAv8_64_L3_INDEX(vaddr), VREGION_FLAGS_READ_WRITE, 
-                                  offset + i * 512 * BASE_PAGE_SIZE, numMapped, mapping);
+                                  offset + i * NUM_PT_SLOTS * BASE_PAGE_SIZE, numMapped, mapping);
         if (err_is_fail(err)) {
             printf("\n");
             //printf("mapping leaf: iteration: %d --------------------------------------\n", j);
@@ -467,11 +467,12 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             return -1;
         }
         
+        for (int j = 0; j < numMapped; j++) {
         st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                   children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)] 
                   = (void*) 1;
-        
-        vaddr = vaddr + BASE_PAGE_SIZE * numMapped;
+            vaddr = vaddr + BASE_PAGE_SIZE;
+        }
         numPages -= numMapped;
     }
 

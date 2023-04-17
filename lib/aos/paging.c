@@ -438,17 +438,20 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         if (err_is_fail(err)) {
             return err_push(err, LIB_ERR_SLOT_ALLOC);
         }
-
+       
         numMapped = MIN((int)(NUM_PT_SLOTS - VMSAv8_64_L3_INDEX(vaddr)), numPages);
-        printf("vaddr: %p\n", vaddr);
-        printf("i: %d, l1 index: %d\n", i, VMSAv8_64_L1_INDEX(vaddr));
-        printf("i: %d, l2 index: %d\n", i, VMSAv8_64_L2_INDEX(vaddr));
-        printf("i: %d, l3 index: %d\n", i, VMSAv8_64_L3_INDEX(vaddr));
+        printf("numPages:  %d\n", numPages);
+        printf("numMapped: %d\n", numMapped);
+        // printf("vaddr: %p\n", vaddr);
+        // printf("i: %d, l1 index: %d\n", i, VMSAv8_64_L1_INDEX(vaddr));
+        // printf("i: %d, l2 index: %d\n", i, VMSAv8_64_L2_INDEX(vaddr));
+        // printf("i: %d, l3 index: %d\n", i, VMSAv8_64_L3_INDEX(vaddr));
+        printf("offset: %p\n", offset + NUM_PT_SLOTS * BASE_PAGE_SIZE * i);
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
                                   children[VMSAv8_64_L2_INDEX(vaddr)]->self, frame,
                                   VMSAv8_64_L3_INDEX(vaddr), flags, 
-                                  offset, numMapped, mapping);
+                                  offset + (BASE_PAGE_SIZE * NUM_PT_SLOTS * i), numMapped, mapping);
         if (err_is_fail(err)) {
             printf("\n");
             printf("vnode_map failed mapping leaf node: %s\n", err_getstring(err));
@@ -456,7 +459,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             return -1;
         }
         
-        for (int j = 0; j < numMapped; j++) {
+        for (int j = 0; j < NUM_PT_SLOTS; j++) {
             st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                   children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)] 
                   = (void*) 1;

@@ -96,6 +96,7 @@ static void alloc_and_map_many(void)
 
     struct capref cap;
     err = frame_alloc(&cap, FRAME_SIZE, NULL);
+    
     if (err_is_fail(err)) {
         grading_test_fail("V1-2", "failed to allocate a single frame\n");
         return;
@@ -136,7 +137,7 @@ static void alloc_and_map_fixed(void)
 {
     errval_t err;
 
-    grading_printf("alloc_and_map_fixed(%lx, %zu)\n", FIXED_ADDRESS, FRAME_SIZE);
+    grading_printf("alloc_and_map_fixed(%lx, %zu)\n", FIXED_ADDRESS, BASE_PAGE_SIZE);
 
     struct capref cap;
     err = frame_alloc(&cap, FRAME_SIZE, NULL);

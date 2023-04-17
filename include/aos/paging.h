@@ -256,4 +256,8 @@ static inline errval_t paging_map_fixed(struct paging_state *st, lvaddr_t vaddr,
 errval_t paging_unmap(struct paging_state *st, const void *region);
 
 
+errval_t mapNewPT(struct paging_state * st, capaddr_t slot, 
+                  uint64_t offset, uint64_t pte_ct, enum objtype type, struct pageTable * parent);
+
+
 #endif  // LIBAOS_PAGING_H

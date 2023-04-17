@@ -223,7 +223,7 @@ errval_t slab_refill_no_pagefault(struct slab_allocator *slabs, struct capref fr
         return err;
     }
     
-    void * buf;
+    void *buf;
     err = paging_map_frame_attr_offset(get_current_paging_state(), &buf, actualBytes, frame_slot, 0, VREGION_FLAGS_READ_WRITE);
     if (err_is_fail(err)) {
         return err;

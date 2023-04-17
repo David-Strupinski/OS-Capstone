@@ -216,12 +216,6 @@ errval_t paging_init_onthread(struct thread *t)
  */
 errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t alignment)
 {
-    // make compiler happy about unused parameters
-    (void)st;
-    (void)buf;
-    (void)bytes;
-    (void)alignment;
-
     /**
      * TODO(M1):
      *    - use a linear allocation scheme. (think about what allocation sizes are valid)
@@ -232,7 +226,8 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
      */
     size_t aligned_bytes = ROUND_UP(bytes, alignment);
 
-    genvaddr_t vaddr = VADDR_CALCULATE(NUM_PT_SLOTS/4, 0, 0, 0);
+    genvaddr_t vaddr = VADDR_CALCULATE(NUM_PT_SLOTS/4, 0, 0, 0, 0);
+    printf("vaddr calculate: %p\n", vaddr);
     size_t space = 0;
     genvaddr_t currentL0 = NUM_PT_SLOTS/4;
     genvaddr_t currentL1 = 0;
@@ -272,7 +267,7 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
 
         if (resetVaddr) {
             resetVaddr = false;
-            vaddr = VADDR_CALCULATE(currentL0, currentL1, currentL2, currentL3);
+            vaddr = VADDR_CALCULATE(currentL0, currentL1, currentL2, currentL3, 0);
             space = 0;
         }
     }
@@ -445,7 +440,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
 
         numMapped = MIN((int)(NUM_PT_SLOTS - VMSAv8_64_L3_INDEX(vaddr)), numPages);
-        printf("vaddr: %d\n", vaddr + i * NUM_PT_SLOTS * BASE_PAGE_SIZE);
+        printf("vaddr: %p\n", vaddr);
         printf("i: %d, l1 index: %d\n", i, VMSAv8_64_L1_INDEX(vaddr));
         printf("i: %d, l2 index: %d\n", i, VMSAv8_64_L2_INDEX(vaddr));
         printf("i: %d, l3 index: %d\n", i, VMSAv8_64_L3_INDEX(vaddr));

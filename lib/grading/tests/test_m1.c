@@ -381,7 +381,7 @@ static void alloc_many_alignments(struct mm *mem)
 errval_t grading_run_tests_physical_memory(struct mm *mm)
 {
     if (grading_options.m1_subtest_run == 0) {
-        //return SYS_ERR_OK;  // TODO: we changed this
+        return SYS_ERR_OK;  // TODO: we changed this
     }
 
     grading_printf("#################################################\n");

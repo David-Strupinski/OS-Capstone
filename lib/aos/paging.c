@@ -392,12 +392,27 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     // Hint:
     //  - think about what mapping configurations are actually possible
     //
-
-    // TODO: detect duplicate mappings
         
     // number of pages to map
     int originalNumPages = ROUND_UP(bytes, BASE_PAGE_SIZE) / BASE_PAGE_SIZE;
     int numPages = originalNumPages;
+
+    // detect duplicate mappings
+    for (int checkPage = 0; checkPage < originalNumPages; checkPage++) {
+        if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)] != NULL &&
+                st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                          children[VMSAv8_64_L1_INDEX(vaddr)] != NULL &&
+                st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                          children[VMSAv8_64_L1_INDEX(vaddr)]->
+                          children[VMSAv8_64_L2_INDEX(vaddr)] != NULL &&
+                st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+                          children[VMSAv8_64_L1_INDEX(vaddr)]->
+                          children[VMSAv8_64_L2_INDEX(vaddr)]->
+                          children[VMSAv8_64_L3_INDEX(vaddr)] != NULL) {
+            return LIB_ERR_VSPACE_REGION_OVERLAP;
+        }
+    }
+
     // map pages in L3 page table-sized chunks
     for (int i = 0; numPages > 0; i++) {
         // If necessary allocate and initialize a new L1 pagetable

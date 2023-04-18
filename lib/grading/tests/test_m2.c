@@ -37,7 +37,7 @@
 /// framesize to be 5 MB
 #define FRAME_SIZE      (5 << 20)
 #define NUM_MAPS        16
-#define FIXED_ADDRESS   (32ULL << 40)
+#define FIXED_ADDRESS   (32ULL << 40) + BASE_PAGE_SIZE
 #define HEAP_ALLOC_SIZE (256 << 20)
 
 static void alloc_and_map_one(void)

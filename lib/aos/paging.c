@@ -326,25 +326,10 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //
     // Hint:
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
-    // struct mappedPTE *curr = st->mappedPTEs;
-    // while (curr != NULL) {              // overlapping back
-    //     if (capcmp(frame, curr->cap) && !((offset + bytes < curr->offset) || (offset > curr->offset + curr->numBytes))) {
-    //         printf("they're the same\n");
-    //         return -1;
-    //     }
-    //     curr = curr->next;
-    // }
-
-    // TODO: detect duplicate capref mappings
 
     paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
     
     genvaddr_t vaddr = (genvaddr_t)*buf;
-    if (offset != 0) {
-        for (int i = 0; i < 100; i++) {
-            // printf("offset check: %d------------------------------------------------------------------\n", offset);
-        }
-    }
     errval_t err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
     if (err_is_fail(err)) {
         printf("vnode_map failed: %s\n", err_getstring(err));
@@ -393,9 +378,12 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     // Hint:
     //  - think about what mapping configurations are actually possible
     //
+
+    // TODO: detect duplicate mappings
         
     // number of pages to map
-    int numPages = ROUND_UP(bytes, BASE_PAGE_SIZE) / BASE_PAGE_SIZE;
+    int originalNumPages = ROUND_UP(bytes, BASE_PAGE_SIZE) / BASE_PAGE_SIZE;
+    int numPages = originalNumPages;
 
     // map pages in L3 page table-sized chunks
     for (int i = 0; numPages > 0; i++) {
@@ -430,7 +418,6 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             ->children[VMSAv8_64_L2_INDEX(vaddr)]
             ->children[VMSAv8_64_L3_INDEX(vaddr)]
             = (struct pageTable *)slab_alloc(&(st->ma));
-
         struct capref mapping;
         err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
         if (err_is_fail(err)) {
@@ -438,18 +425,11 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
        
         numMapped = MIN((int)(NUM_PT_SLOTS - VMSAv8_64_L3_INDEX(vaddr)), numPages);
-        // printf("numPages:  %d\n", numPages);
-        // printf("numMapped: %d\n", numMapped);
-        // printf("vaddr: %p\n", vaddr);
-        // printf("i: %d, l1 index: %d\n", i, VMSAv8_64_L1_INDEX(vaddr));
-        // printf("i: %d, l2 index: %d\n", i, VMSAv8_64_L2_INDEX(vaddr));
-        // printf("i: %d, l3 index: %d\n", i, VMSAv8_64_L3_INDEX(vaddr));
-        // printf("offset: %p\n", offset + NUM_PT_SLOTS * BASE_PAGE_SIZE * i);
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
                                   children[VMSAv8_64_L2_INDEX(vaddr)]->self, frame,
                                   VMSAv8_64_L3_INDEX(vaddr), flags, 
-                                  offset + (BASE_PAGE_SIZE * NUM_PT_SLOTS * i), numMapped, mapping);
+                                  offset + (BASE_PAGE_SIZE * (originalNumPages - numPages)), numMapped, mapping);
         if (err_is_fail(err)) {
             printf("\n");
             printf("vnode_map failed mapping leaf node: %s\n", err_getstring(err));
@@ -457,7 +437,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             return -1;
         }
         
-        for (int j = 0; j < NUM_PT_SLOTS; j++) {
+        for (int j = VMSAv8_64_L3_INDEX(vaddr); j < NUM_PT_SLOTS; j++) {
             st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                   children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)] 
                   = (void*) 1;
@@ -465,6 +445,10 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
         numPages -= numMapped;
     }
+
+    // top off the slab allocator
+    //err = slab_check_and_refill(&(st->ma));
+    //DEBUG_ERR(err, "slab refill failed\n");
 
     return SYS_ERR_OK;
 }

@@ -479,6 +479,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         err = slab_check_and_refill(&(st->ma));
         if (err_is_fail(err)) {
             printf("slab alloc error: %s\n", err_getstring(err));
+            return LIB_ERR_SLAB_REFILL;
         }
     }
     

@@ -47,16 +47,10 @@ struct pageTable {
     uint64_t numFree;
     struct pageTable * parent;
     struct capref self;
+    struct capref mapping;
     size_t offset;
     size_t numBytes;
     struct pageTable * children[NUM_PT_SLOTS];
-};
-
-struct mappedPTE {
-    struct mappedPTE *next;
-    size_t offset;
-    size_t numBytes;
-    struct capref cap;
 };
 
 #define NUM_PTS_ALLOC 64
@@ -72,15 +66,11 @@ struct mappedPTE {
     /// addresses starting from `current_vaddr` are free
     /// TODO(M2): replace me with proper region management
     lvaddr_t current_vaddr;
-    struct mappedPTE *mappedPTEs;
+    lvaddr_t start_vaddr;
     struct slab_allocator ma;       ///< Slab allocator for metadata
     char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable))];
     
     struct pageTable * root;
-    struct capref oldRoot;
-    struct capref L1;
-    struct capref L2;
-    struct capref L3;
 };
 
 

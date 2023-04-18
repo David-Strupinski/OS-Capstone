@@ -159,10 +159,26 @@ static void *morecore_alloc(size_t bytes, size_t *retbytes)
  */
 static void morecore_free(void *base, size_t bytes)
 {
+    printf("made it into the funciotn\n");
     // make compiler happy about unused parameters
     (void)base;
     (void)bytes;
-    USER_PANIC("NYI: implement me\n");
+    struct morecore_state *state = get_morecore_state();
+    struct allocdBlock * curr = state->root;
+    struct allocdBlock * prev = curr;
+    while (curr != NULL) {
+        if (curr->vaddr == (lvaddr_t)base) {
+            paging_unmap(get_current_paging_state(),base);
+            prev->next = curr->next;
+            printf("found it!\n");
+            //TODO: slab free curr
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+    printf("never found it\n");
+    return;
 }
 
 /**

@@ -95,18 +95,17 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     // TODO (M2):
     //  -  Implement page fault handler that installs frames when a page fault
     //     occurs and keeps track of the virtual address space.
+    
+    // set some metadata
     st->current_vaddr = start_vaddr;
+    st->start_vaddr = start_vaddr;
     st->slot_alloc = ca;
    
     // initialize a slab allocator to give us our memory
-    // TODO: make this dynamic allocation, not static.
     slab_init(&st->ma, sizeof(struct pageTable), NULL);
     slab_grow(&st->ma, st->slab_buf, SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable)));
-    // err = slab_check_and_refill(&(st->ma));
-    // if (err_is_fail(err)) {
-    //     return err;
-    // }
     
+    // Initialize first L0 table metadata and other metadata
     struct pageTable *pt = slab_alloc(&(st->ma));
     pt->offset = 0;
     pt->self = root;
@@ -226,13 +225,12 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
     size_t aligned_bytes = ROUND_UP(bytes, alignment);
 
     genvaddr_t vaddr = st->current_vaddr;
-    // printf("vaddr calculate: %p\n", vaddr);
     size_t space = 0;
     genvaddr_t currentL0 = VMSAv8_64_L0_INDEX(vaddr);
     genvaddr_t currentL1 = VMSAv8_64_L1_INDEX(vaddr);
     genvaddr_t currentL2 = VMSAv8_64_L2_INDEX(vaddr);
     genvaddr_t currentL3 = VMSAv8_64_L3_INDEX(vaddr);
-   
+    // find a completely free address with enough space contiguous
     bool resetVaddr = false;
     while (space < aligned_bytes) {
 
@@ -261,7 +259,13 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
             currentL0++;
         }
         if (currentL0 >= NUM_PT_SLOTS) {
-            return -1;
+            vaddr = st->start_vaddr;
+            currentL0 = VMSAv8_64_L0_INDEX(vaddr);
+            currentL1 = VMSAv8_64_L1_INDEX(vaddr);
+            currentL2 = VMSAv8_64_L2_INDEX(vaddr);
+            currentL3 = VMSAv8_64_L3_INDEX(vaddr);
+            resetVaddr = false;
+            space = 0;
         }
 
         if (resetVaddr) {
@@ -270,7 +274,12 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
             space = 0;
         }
     }
+    
+    
     *buf = (void*) vaddr;
+    // move the address up so that reentrant threads don't take the memory we want
+    // (it is still possible to reuse freed addresses because the vaddr will eventually loop back around)
+    // TODO: is the adding of BASE_PAGE_SIZE necessary?
     st->current_vaddr = ROUND_UP(vaddr + bytes + BASE_PAGE_SIZE,BASE_PAGE_SIZE);
     return SYS_ERR_OK;
 }
@@ -330,8 +339,10 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     // Hint:
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
 
+    // find and reserve an empty area of the virtual address space
     paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
     
+    // map the found slot
     genvaddr_t vaddr = (genvaddr_t)*buf;
     errval_t err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
     if (err_is_fail(err)) {
@@ -387,25 +398,29 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     // number of pages to map
     int originalNumPages = ROUND_UP(bytes, BASE_PAGE_SIZE) / BASE_PAGE_SIZE;
     int numPages = originalNumPages;
-    
     // map pages in L3 page table-sized chunks
     for (int i = 0; numPages > 0; i++) {
-        // map a page table if necessary
-        
+        // If necessary allocate and initialize a new L1 pagetable
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)] == NULL) {
+            // mapNewPt() is a helper function that adds a new page 
+            // table of the type provided to the page table provided
             err = mapNewPT(st, VMSAv8_64_L0_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l1, st->root);
             if (err_is_fail(err)) {
                 printf("pt_alloc_l1 failed: %s\n", err_getstring(err));
+                return err;
             }
         }
+        // If necessary allocate and initialize a new L2 pagetable
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                       children[VMSAv8_64_L1_INDEX(vaddr)] == NULL) {
             err = mapNewPT(st, VMSAv8_64_L1_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l2, 
                      st->root->children[VMSAv8_64_L0_INDEX(vaddr)]);
             if (err_is_fail(err)) {
                 printf("pt_alloc_l2 failed: %s\n", err_getstring(err));
+                return err;
             }
         }
+        // If necessary allocate and initialize a new L3 pagetable
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                       children[VMSAv8_64_L2_INDEX(vaddr)] == NULL) {
             err = mapNewPT(st, VMSAv8_64_L2_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l3, 
@@ -413,18 +428,19 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
                                children[VMSAv8_64_L1_INDEX(vaddr)]);
             if (err_is_fail(err)) {
                 printf("pt_alloc_l3 failed: %s\n", err_getstring(err));
+                return err;
             }
         }
-       
-        // allocate a slot for the mapping of one page in the L3 page table
+        
+        
+        // allocate a slot for the mapping of the pages in the L3 page table
         struct capref mapping;
-        
         err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
-        
         if (err_is_fail(err)) {
             return err_push(err, LIB_ERR_SLOT_ALLOC);
         }
-       
+
+        // map the maximum number of pages that we can fit in this L3 page table
         numMapped = MIN((int)(NUM_PT_SLOTS - VMSAv8_64_L3_INDEX(vaddr)), numPages);
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->
@@ -432,27 +448,39 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
                                   VMSAv8_64_L3_INDEX(vaddr), flags, 
                                   offset + (BASE_PAGE_SIZE * (originalNumPages - numPages)), numMapped, mapping);
         if (err_is_fail(err)) {
-            printf("\n");
             printf("vnode_map failed mapping leaf node: %s\n", err_getstring(err));
-            printf("\n");
-            return -1;
+            return err;
         }
+
+        // book keeping for unmapping later
+        st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
+                  children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)] = slab_alloc(&st->ma);
+        st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
+                  children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)]->mapping = mapping;
+        st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
+                  children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)]->numBytes = bytes;
         
+        // set all the rest of the children in this L3 page table to not null (so we see them as unused) 
+        // except for the first one where we store our book keeping
+        // TODO: potentially save the extra slots in our L3 page table if the optomization is needed.
+        vaddr+=BASE_PAGE_SIZE;
         for (int j = VMSAv8_64_L3_INDEX(vaddr); j < NUM_PT_SLOTS; j++) {
             st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                   children[VMSAv8_64_L2_INDEX(vaddr)]->children[VMSAv8_64_L3_INDEX(vaddr)] 
                   = (void*) 1;
             vaddr += BASE_PAGE_SIZE;
         }
+
+        // update loop variable
         numPages -= numMapped;
-        printf("remaining slab space: %p\n", slab_freecount(&st->ma));
-        printf("remaining slot space: %p\n", st->slot_alloc->space);
+        // printf("slab size:  %p\n", slab_freecount(&st->ma));
+        // printf("slot size:  %p\n", st->slot_alloc->space);
+        // refill the slab if necessary
         err = slab_check_and_refill(&(st->ma));
         if (err_is_fail(err)) {
             printf("slab alloc error: %s\n", err_getstring(err));
         }
     }
-
     
     return SYS_ERR_OK;
 }
@@ -476,8 +504,51 @@ errval_t paging_unmap(struct paging_state *st, const void *region)
 
     // TODO(M2):
     //  - implemet unmapping of a previously mapped region
-    for (int i = 0; i < 100; i++){
-        printf("paging_unmap\n");
+
+    // check if the region is allocated.
+    if (st->root->children[VMSAv8_64_L0_INDEX(region)]==NULL
+        ||st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                    children[VMSAv8_64_L1_INDEX(region)]==NULL
+        ||st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                    children[VMSAv8_64_L1_INDEX(region)]->
+                    children[VMSAv8_64_L2_INDEX(region)]==NULL 
+        ||st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                    children[VMSAv8_64_L1_INDEX(region)]->
+                    children[VMSAv8_64_L2_INDEX(region)]->
+                    children[VMSAv8_64_L3_INDEX(region)]==NULL
+        ) {
+        printf("region is not allocated\n");
+        return SYS_ERR_VM_ALREADY_MAPPED;
     }
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // find out the size of the region to unmap (stored in each L3 page table 
+    // since mappings are done by groups of L3 page tables)
+    uint64_t bytes_to_unmap = st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                                        children[VMSAv8_64_L1_INDEX(region)]->
+                                        children[VMSAv8_64_L2_INDEX(region)]->
+                                        children[VMSAv8_64_L3_INDEX(region)]->numBytes;
+
+    
+    // continually unmap the existing mappings until we've gone over the limit. 
+    uint64_t bytes_unmapped = 0;
+    while (bytes_unmapped < bytes_to_unmap) {
+        vnode_unmap(st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                              children[VMSAv8_64_L1_INDEX(region)]->
+                              children[VMSAv8_64_L2_INDEX(region)]->self, 
+                    st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                              children[VMSAv8_64_L1_INDEX(region)]->
+                              children[VMSAv8_64_L2_INDEX(region)]->
+                              children[VMSAv8_64_L3_INDEX(region)]->mapping);
+        
+        // be sure to mark the L3 PT slots unused
+        for (uint64_t i = 0; i < MIN(NUM_PT_SLOTS, bytes_to_unmap-bytes_unmapped); i++) {
+            st->root->children[VMSAv8_64_L0_INDEX(region)]->
+                      children[VMSAv8_64_L1_INDEX(region)]->
+                      children[VMSAv8_64_L2_INDEX(region)]->
+                      children[VMSAv8_64_L3_INDEX(region)]->
+                      children[i] = NULL;
+        }
+        bytes_unmapped += BASE_PAGE_SIZE * 512;
+        region += BASE_PAGE_SIZE * 512;
+    }
+    return SYS_ERR_OK;
 }

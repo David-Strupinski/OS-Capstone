@@ -249,19 +249,18 @@ errval_t slab_default_refill(struct slab_allocator *slabs)
 
 errval_t slab_check_and_refill(struct slab_allocator *slabs) {
     errval_t err = SYS_ERR_OK;
-    if (slab_freecount(slabs) < 16 && !slabs->refilling) { 
+    if (slab_freecount(slabs) < 64 && !slabs->refilling) { 
         slabs->refilling = true;
-        printf("refilling-------------------------------------------------------------------------------------------------------------------------\n");
         err = slab_default_refill(slabs);
         slabs->refilling = false;
     }
     return err;
 }
+
 errval_t slab_force_refill(struct slab_allocator *slabs) {
     errval_t err = SYS_ERR_OK;
     if (!slabs->refilling) { 
         slabs->refilling = true;
-        printf("refilling-------------------------------------------------------------------------------------------------------------------------\n");
         err = slab_default_refill(slabs);
         slabs->refilling = false;
     }

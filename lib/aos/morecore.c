@@ -111,7 +111,7 @@ errval_t morecore_init(size_t alignment)
 #else /* !USE_STATIC_HEAP */
 
 // Size of the starting heap
-#define HEAP_SIZE (256<<20)
+//#define HEAP_SIZE (256<<20)
 
 /**
  * @brief Morecore memory allocator to back the heap region with dynamically allocated memory

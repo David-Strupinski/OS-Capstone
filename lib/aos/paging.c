@@ -106,6 +106,7 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr, struct
     // if (err_is_fail(err)) {
     //     return err;
     // }
+    
     struct pageTable *pt = slab_alloc(&(st->ma));
     pt->offset = 0;
     pt->self = root;
@@ -224,13 +225,13 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
      */
     size_t aligned_bytes = ROUND_UP(bytes, alignment);
 
-    genvaddr_t vaddr = VADDR_CALCULATE(NUM_PT_SLOTS/4, 0, 0, 0, 0);
+    genvaddr_t vaddr = st->current_vaddr;
     // printf("vaddr calculate: %p\n", vaddr);
     size_t space = 0;
-    genvaddr_t currentL0 = NUM_PT_SLOTS/4;
-    genvaddr_t currentL1 = 0;
-    genvaddr_t currentL2 = 0;
-    genvaddr_t currentL3 = 0;
+    genvaddr_t currentL0 = VMSAv8_64_L0_INDEX(vaddr);
+    genvaddr_t currentL1 = VMSAv8_64_L1_INDEX(vaddr);
+    genvaddr_t currentL2 = VMSAv8_64_L2_INDEX(vaddr);
+    genvaddr_t currentL3 = VMSAv8_64_L3_INDEX(vaddr);
    
     bool resetVaddr = false;
     while (space < aligned_bytes) {
@@ -270,6 +271,7 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
         }
     }
     *buf = (void*) vaddr;
+    st->current_vaddr = ROUND_UP(vaddr + bytes + BASE_PAGE_SIZE,BASE_PAGE_SIZE);
     return SYS_ERR_OK;
 }
 
@@ -278,8 +280,9 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
                   uint64_t offset, uint64_t pte_ct, enum objtype type, struct pageTable * parent) {
     errval_t err;
 
+    //slab_check_and_refill(&(st->ma));
     parent->children[slot] = (struct pageTable*)slab_alloc(&(st->ma));
-
+    
     struct capref mapping;
     err = st->slot_alloc->alloc(st->slot_alloc, &mapping);
     if (err_is_fail(err)) {
@@ -384,10 +387,11 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     // number of pages to map
     int originalNumPages = ROUND_UP(bytes, BASE_PAGE_SIZE) / BASE_PAGE_SIZE;
     int numPages = originalNumPages;
-
+    
     // map pages in L3 page table-sized chunks
     for (int i = 0; numPages > 0; i++) {
         // map a page table if necessary
+        
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)] == NULL) {
             err = mapNewPT(st, VMSAv8_64_L0_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l1, st->root);
             if (err_is_fail(err)) {
@@ -413,13 +417,10 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
        
         // allocate a slot for the mapping of one page in the L3 page table
-        st->root->children[VMSAv8_64_L0_INDEX(vaddr)]
-            ->children[VMSAv8_64_L1_INDEX(vaddr)]
-            ->children[VMSAv8_64_L2_INDEX(vaddr)]
-            ->children[VMSAv8_64_L3_INDEX(vaddr)]
-            = (struct pageTable *)slab_alloc(&(st->ma));
         struct capref mapping;
+        
         err = st->slot_alloc->alloc(st->slot_alloc, &(mapping));
+        
         if (err_is_fail(err)) {
             return err_push(err, LIB_ERR_SLOT_ALLOC);
         }
@@ -444,14 +445,15 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             vaddr += BASE_PAGE_SIZE;
         }
         numPages -= numMapped;
+        printf("remaining slab space: %p\n", slab_freecount(&st->ma));
+        printf("remaining slot space: %p\n", st->slot_alloc->space);
+        err = slab_check_and_refill(&(st->ma));
+        if (err_is_fail(err)) {
+            printf("slab alloc error: %s\n", err_getstring(err));
+        }
     }
 
-    // top off the slab allocator
-    err = slab_check_and_refill(&(st->ma));
-    if (err_is_fail(err)) {
-        printf("slab alloc error: %s\n", err_getstring(err));
-    }
-
+    
     return SYS_ERR_OK;
 }
 

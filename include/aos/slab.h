@@ -51,6 +51,7 @@ errval_t slab_default_refill(struct slab_allocator *slabs);
 errval_t slab_refill_no_pagefault(struct slab_allocator *slabs,
                                   struct capref frame, size_t minbytes);
 errval_t slab_check_and_refill(struct slab_allocator *slabs);
+errval_t slab_force_refill(struct slab_allocator *slabs);
 
 // size of block header
 #define SLAB_BLOCK_HDRSIZE (sizeof(void *))

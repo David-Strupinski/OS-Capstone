@@ -75,7 +75,7 @@ struct mappedPTE {
     struct mappedPTE *mappedPTEs;
     struct slab_allocator ma;       ///< Slab allocator for metadata
     char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable))];
-
+    
     struct pageTable * root;
     struct capref oldRoot;
     struct capref L1;

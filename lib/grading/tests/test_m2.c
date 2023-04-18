@@ -37,7 +37,7 @@
 /// framesize to be 5 MB
 #define FRAME_SIZE      (5 << 20)
 #define NUM_MAPS        16
-#define FIXED_ADDRESS   (32ULL << 40) + BASE_PAGE_SIZE
+#define FIXED_ADDRESS   (32ULL << 40)
 #define HEAP_ALLOC_SIZE (256 << 20)
 
 static void alloc_and_map_one(void)
@@ -194,8 +194,8 @@ static void alloc_heap(void)
 
     size_t npages = HEAP_ALLOC_SIZE / BASE_PAGE_SIZE;
     for (size_t i = 0; i < npages / 32; i++) {
-        grading_printf("accessing buf[%zu] @ %p\n", i * BASE_PAGE_SIZE * 8,
-                       &buf[i * BASE_PAGE_SIZE * 8]);
+        //grading_printf("accessing buf[%zu] @ %p\n", i * BASE_PAGE_SIZE * 8,
+        //               &buf[i * BASE_PAGE_SIZE * 8]);
 
         buf[i * BASE_PAGE_SIZE * 8] = 0x42;
     }
@@ -221,9 +221,9 @@ errval_t grading_run_tests_virtual_memory(bool early)
     grading_printf("# TESTS: Milestone 2 (Virtual Memory Management) \n");
     grading_printf("#################################################\n");
 
-    alloc_and_map_fixed();
+    if (true) {alloc_and_map_fixed();
     alloc_and_map_one();
-    alloc_and_map_many();
+    alloc_and_map_many();}
     alloc_heap();
 
     grading_printf("#################################################\n");

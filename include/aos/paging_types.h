@@ -59,7 +59,7 @@ struct mappedPTE {
     struct capref cap;
 };
 
-#define NUM_PTS_ALLOC 1024
+#define NUM_PTS_ALLOC 64
 #define VADDR_CALCULATE(L0, L1, L2, L3, offset)                                                    \
     (offset) + ((L3) << 12) + ((L2) << 21) + ((L1) << 30) + (((int64_t)(L0)) << 39);
 

@@ -55,7 +55,7 @@ struct pageTable {
 
 #define NUM_PTS_ALLOC 64
 #define VADDR_CALCULATE(L0, L1, L2, L3, offset)                                                    \
-    (offset) + ((L3) << 12) + ((L2) << 21) + ((L1) << 30) + (((int64_t)(L0)) << 39);
+    (offset) + (((int64_t)(L3)) << 12) + (((int64_t)(L2)) << 21) + (((int64_t)(L1)) << 30) + (((int64_t)(L0)) << 39);
 
     /// struct to store the paging state of a process' virtual address space.
     struct paging_state {

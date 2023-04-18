@@ -58,7 +58,7 @@ struct pageTable {
     (offset) + (((int64_t)(L3)) << 12) + (((int64_t)(L2)) << 21) + (((int64_t)(L1)) << 30) + (((int64_t)(L0)) << 39);
 
     /// struct to store the paging state of a process' virtual address space.
-    struct paging_state {
+struct paging_state {
     /// slot allocator to be used for this paging state
     struct slot_allocator *slot_alloc;
 

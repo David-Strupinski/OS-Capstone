@@ -455,7 +455,7 @@ errval_t grading_run_tests_virtual_memory(bool early)
     grading_printf("#################################################\n");
     
     //student tests
-    if (true) alloc_and_map_unmap_and_remap_many_times_fixed(1000);
+    if (true) alloc_and_map_unmap_and_remap_many_times_fixed(2000);
     if (false) alloc_and_map_unmap_and_remap_fixed();
     
     if (true)alloc_and_map_fixed();

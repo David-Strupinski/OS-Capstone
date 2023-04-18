@@ -133,11 +133,22 @@ errval_t morecore_init(size_t alignment)
  */
 static void *morecore_alloc(size_t bytes, size_t *retbytes)
 {
-    debug_printf("hi\n");
-    bytes = ROUND_UP(bytes, BASE_PAGE_SIZE);
-
+    struct morecore_state *state = get_morecore_state();
+    struct allocdBlock * curr = state->root;
+    
+    // allocate a new block
+    slab_check_and_refill(&(state->ma));
+    curr = slab_alloc(&(state->ma));
+    struct capref cap;
+    errval_t err = frame_alloc(&cap, bytes, NULL);
     *retbytes = bytes;
-    return NULL;
+    if (err_is_fail(err)) {
+        printf("failed to allocate frame: %s\n", err_getstring(err));
+        return NULL;
+    }
+    paging_map_frame_attr_offset(get_current_paging_state(), (void**) (&curr->vaddr), bytes, cap, 0, VREGION_FLAGS_READ_WRITE);
+    curr->next = NULL;
+    return (void*)(curr->vaddr);
 }
 
 /**
@@ -163,22 +174,15 @@ static void morecore_free(void *base, size_t bytes)
  */
 errval_t morecore_init(size_t alignment)
 {
-    void *buf = NULL;
-    struct paging_state *st = get_current_paging_state();
-
-    paging_alloc(st, &buf, HEAP_SIZE, alignment);
-
     struct morecore_state *state = get_morecore_state();
-
-    debug_printf("initializing dynamic heap\n");
-
-    thread_mutex_init(&state->mutex);
-
-    state->freep = buf;
-    debug_printf("vaddr_start: %lx\n", (int64_t) buf);
 
     sys_morecore_alloc = morecore_alloc;
     sys_morecore_free = morecore_free;
+
+    slab_init(&state->ma, sizeof(struct allocdBlock), NULL);
+    slab_grow(&state->ma, state->slab_buf, SLAB_STATIC_SIZE(NUM_MEM_BLOCKS_ALLOC, sizeof(struct allocdBlock)));
+    state->root = NULL;
+    state->alignment = alignment;
 
     return SYS_ERR_OK;
 }

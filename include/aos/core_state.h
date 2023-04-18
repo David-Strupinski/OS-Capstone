@@ -26,6 +26,14 @@
 #include <barrelfish_kpi/capabilities.h>
 #include <barrelfish_kpi/init.h> // for CNODE_SLOTS_*
 
+#define NUM_MEM_BLOCKS_ALLOC 20
+
+struct allocdBlock {
+    lvaddr_t vaddr;
+    size_t bytes;
+    struct allocdBlock * next;
+};
+
 struct morecore_state {
     struct thread_mutex mutex;
     Header header_base;
@@ -33,7 +41,10 @@ struct morecore_state {
     // for "real" morecore (lib/aos/morecore.c)
     // TODO: add some state here if needed.
     // for "static" morecore (see lib/aos/static_morecore.c)
-    char *freep;
+    struct slab_allocator ma;       ///< Slab allocator for metadata
+    char slab_buf[SLAB_STATIC_SIZE(NUM_MEM_BLOCKS_ALLOC, sizeof(struct allocdBlock))];
+    struct allocdBlock * root;
+    size_t alignment;
 };
 
 struct ram_alloc_state {

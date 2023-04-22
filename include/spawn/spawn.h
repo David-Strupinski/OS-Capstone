@@ -68,10 +68,19 @@ struct spawninfo {
     /// exit code of this process, or zero if it hasn't exited yet
     int exitcode;
 
-    // TODO(M2): Add fields you need to store state
+    // TODO(M3): Add fields you need to store state
     //           when spawning a new dispatcher,
     //           e.g. references to the child's
     //           capabilities or paging state
+
+    // Capref to child page table
+    struct capref root;
+
+    // Cnoderef to child page table
+    struct cnoderef cnoderef;
+
+    // Child's paging state
+    struct paging_state *st;
 };
 
 

@@ -72,18 +72,47 @@ __attribute__((__used__)) static void armv8_set_registers(dispatcher_handle_t ha
 errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, const char *name,
                                   domainid_t pid)
 {
-    // make compiler happy about unused parameters
-    (void)si;
-    (void)bi;
-    (void)name;
-    (void)pid;
+    errval_t err;
 
-    // TODO: Implement me
-    // - Get the module from the multiboot image
-    // - create the elfimg struct from the module
+    // Get the module from the multiboot image, create a capability to it
+    struct mem_region* module = multiboot_find_module(bi, name);
+    struct capref child_frame = {
+        .cnode = /* I dont know */,
+        .slot = module->mrmod_slot,
+    };
+
+    // Create the elfimg struct from the module
+    si.binary_name = (char *) malloc(strlen(name) + 1);     // Probably need to free this later
+    strncpy(si.binary_name, name, strlen(name) + 1);
+    si.cmdline = NULL;
+    si.pid = pid;
+    si.state = SPAWN_STATE_SPAWNING;
+    si.exitcode = 0;
+
+    // Cleave off some physical memory from parent for child
+    err = cnode_create_l1(&si.root, &si.cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l1 page table");
+    err = cnode_create_foreign_l2(si.root, 0, si.cnoderef);     // in first slot of l1
+    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l2 page table");
+
+    // Map a page in our OWN vaddress space to store child's paging state struct,
+    // note the use of the child ptable's capability, save a reference to it
+    err = paging_map_frame_attr_offset(&current, si.st, BASE_PAGE_SIZE,
+                                       root, 0, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in parent page table");
+
+    // Use it to create paging state for child
+    paging_init_state_foreign(child_state, cnoderef.cnode, root, get_default_slot_allocator());
+
+    // Make child inherit its own paging_state struct by mapping its second page to the 
+    // same page in the parent, leaving first empty for NULL
+    err = paging_map_fixed_attr_offset(child_state, BASE_PAGE_SIZE, root, BASE_PAGE_SIZE, 
+                                       0, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in child page table");
+
     // - Fill in argc/argv from the multiboot command line
     // - Call spawn_load_with_args
-    return LIB_ERR_NOT_IMPLEMENTED;
+
 }
 
 /**

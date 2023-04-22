@@ -140,7 +140,26 @@ errval_t paging_init_state_foreign(struct paging_state *st, lvaddr_t start_vaddr
     (void)ca;
 
     // TODO (M3): Implement state struct initialization
-    return LIB_ERR_NOT_IMPLEMENTED;
+
+    st->current_vaddr = start_vaddr;
+    st->start_vaddr = start_vaddr;
+    st->slot_alloc = ca;
+   
+    // initialize a slab allocator to give us our memory
+    slab_init(&st->ma, sizeof(struct pageTable), NULL);
+    slab_grow(&st->ma, st->slab_buf, SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable)));
+    
+    // Initialize first L0 table metadata and other metadata
+    struct pageTable *pt = slab_alloc(&(st->ma));
+    pt->offset = 0;
+    pt->self = root;
+    pt->parent = NULL;
+    for (int i = 0; i < NUM_PT_SLOTS; i++) {
+        pt->children[i] = NULL;
+    }
+    st->root = pt;
+
+    return SYS_ERR_OK;
 }
 
 /**

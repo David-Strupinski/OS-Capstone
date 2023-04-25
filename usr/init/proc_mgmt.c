@@ -107,7 +107,12 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     (void)capv;
     (void)core;
     (void)pid;
-
+    //struct spawninfo si;
+    //(void)spawn_load_with_bootinfo(&si, bi, path, 23);
+    struct mem_region* module = multiboot_find_module(bi, argv[0]);
+    struct elfimg ei;
+    elfimg_init_from_module(&ei, module);    
+    //spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
     USER_PANIC("functionality not implemented\n");
     // TODO:
     //  - find the image
@@ -147,8 +152,9 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     //  - keep track of the spawned process
     // HINT: you may call proc_mgmt_spawn_with_caps with some preparation
     // Note: With multicore support, you many need to send a message to the other core
-    USER_PANIC("functionality not implemented\n");
-    return LIB_ERR_NOT_IMPLEMENTED;
+    printf("here's the command line: %s\n", cmdline);
+    
+    return SYS_ERR_OK;
 }
 
 
@@ -170,8 +176,10 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
     (void)path;
     (void)core;
     (void)pid;
-
-    USER_PANIC("functionality not implemented\n");
+    printf("here's the path: %s\n", path);
+    //struct bootinfo bi = (struct bootinfo*)strtol(argv[1], NULL, 10);
+    domainid_t var = 23;
+    proc_mgmt_spawn_with_caps(0, NULL, 0, NULL, 8, &var);
     // TODO:
     //  - find the image
     //  - allocate a PID
@@ -180,7 +188,7 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
     //  - keep track of the spawned process
     //
     // Note: With multicore support, you many need to send a message to the other core
-    return LIB_ERR_NOT_IMPLEMENTED;
+    return SYS_ERR_OK;
 }
 
 

@@ -109,16 +109,18 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     (void)pid;
     struct spawninfo si;
     struct elfimg ei;
-    //(void)spawn_load_with_bootinfo(&si, bi, path, 23);
-    printf("made it to spawn with caps\n");
-    spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
-    struct mem_region* module = multiboot_find_module(bi, argv[0]);
-    printf("one\n");
     
+    struct mem_region* module = multiboot_find_module(bi, argv[0]);
+    if (module == NULL) {
+        printf("multiboot_find_module failed to find %s\n", argv[0]);
+        return SPAWN_ERR_FIND_MODULE;
+    }
+   
     elfimg_init_from_module(&ei, module);
-    printf("two\n");    
+    errval_t err = paging_map_frame_attr_offset(get_current_paging_state(), &ei.buf, ei.size, ei.mem, 0, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR(err, "looks like paging faield to map the elf image in our own vspace\n");
     spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
-    USER_PANIC("functionality not implemented\n");
+    
     // TODO:
     //  - find the image
     //  - allocate a PID
@@ -127,7 +129,7 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     //  - keep track of the spawned process
     //
     // Note: With multicore support, you many need to send a message to the other core
-    return LIB_ERR_NOT_IMPLEMENTED;
+    return SYS_ERR_OK;
 }
 
 
@@ -157,8 +159,11 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     //  - keep track of the spawned process
     // HINT: you may call proc_mgmt_spawn_with_caps with some preparation
     // Note: With multicore support, you many need to send a message to the other core
-    printf("here's the command line: %s\n", cmdline);
     
+    // TODO: parse command line properly
+    const char* argv[1];
+    argv[0] = cmdline;
+    proc_mgmt_spawn_with_caps(1, argv, 0, NULL, core, pid);
     return SYS_ERR_OK;
 }
 
@@ -181,10 +186,7 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
     (void)path;
     (void)core;
     (void)pid;
-    printf("here's the path: %s\n", path);
-    //struct bootinfo bi = (struct bootinfo*)strtol(argv[1], NULL, 10);
-    domainid_t var = 23;
-    proc_mgmt_spawn_with_caps(0, NULL, 0, NULL, 8, &var);
+    
     // TODO:
     //  - find the image
     //  - allocate a PID

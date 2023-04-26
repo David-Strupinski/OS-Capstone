@@ -25,20 +25,16 @@ void elfimg_init_from_module(struct elfimg *img, struct mem_region *module)
     (void)img;
     (void)module;
 
-
+    // construct the capability reference
     struct capref child_frame = {
-        .cnode = cnode_module, // not certain this is the right thing
+        .cnode = cnode_module,
         .slot = module->mrmod_slot,
     };
+
+    // obtain size of module and initialize elfimg struct
     struct capability cap;
     cap_direct_identify(child_frame, &cap);
     elfimg_init_with_cap(img, child_frame, cap.u.frame.bytes);
-    printf("got here\n");
-    // TODO:
-    //   - construct the capability reference
-    //   - obtain the size of the module
-    //   - initialize the elfimg structure by calling `elfimg_init_with_cap()`
-    USER_PANIC("Not implemented");
 }
 
 

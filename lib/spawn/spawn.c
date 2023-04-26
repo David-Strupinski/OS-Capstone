@@ -72,27 +72,30 @@ __attribute__((__used__)) static void armv8_set_registers(dispatcher_handle_t ha
 errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, const char *name,
                                   domainid_t pid)
 {
-    errval_t err;
+    //errval_t err;
 
     // Get the module from the multiboot image, create a capability to it
-    struct mem_region* module = multiboot_find_module(bi, name);
-    
+    //struct mem_region* module = multiboot_find_module(bi, name);
+    (void) si;
+    (void) bi;
+    (void) name;
+    (void) pid;
 
     // Create the elfimg struct from the module
-    si.binary_name = (char *) malloc(strlen(name) + 1);     // Probably need to free this later
-    strncpy(si.binary_name, name, strlen(name) + 1);
-    si.cmdline = NULL;
-    si.pid = pid;
-    si.state = SPAWN_STATE_SPAWNING;
-    si.exitcode = 0;
+    // si->binary_name = (char *) malloc(strlen(name) + 1);     // Probably need to free this later
+    // strncpy(si.binary_name, name, strlen(name) + 1);
+    // si.cmdline = NULL;
+    // si.pid = pid;
+    // si.state = SPAWN_STATE_SPAWNING;
+    // si.exitcode = 0;
 
-    char* strings = multiboot_module_opts(module);
+    // char* strings = multiboot_module_opts(module);
     
-    printf("This is what multiboot_module_opts returns: %s\n", strings);
-    // - Fill in argc/argv from the multiboot command line
-    // - Call spawn_load_with_args
-    struct elfimg *img;
-    spawn_load_with_args(si, img, int argc, const char *argv[], pid);
+    // printf("This is what multiboot_module_opts returns: %s\n", strings);
+    // // - Fill in argc/argv from the multiboot command line
+    // // - Call spawn_load_with_args
+    // struct elfimg *img;
+    // spawn_load_with_args(si, img, int argc, const char *argv[], pid);
     return -1;
 }
 
@@ -134,35 +137,34 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // - Setup the environment
     // - set the registers correctly
     // - Set the spawn state
-
-    printf("Made it into spawn_load_with_caps----------------------------------------------\n");
+    printf("Made it into spawn_load_with_caps (lower level)----------------------------------------------\n");
 
 
     // Cleave off some physical memory from parent for child
-    err = cnode_create_l1(&si.root, &si.cnoderef);
-    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l1 page table");
-    err = cnode_create_foreign_l2(si.root, 0, si.cnoderef);     // in first slot of l1
-    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l2 page table");
+    // err = cnode_create_l1(&si.root, &si.cnoderef);
+    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l1 page table");
+    // err = cnode_create_foreign_l2(si.root, 0, si.cnoderef);     // in first slot of l1
+    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l2 page table");
 
-    // Map a page in our OWN vaddress space to store child's paging state struct,
-    // note the use of the child ptable's capability, save a reference to it
-    err = paging_map_frame_attr_offset(&current, si.st, BASE_PAGE_SIZE,
-                                       root, 0, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in parent page table");
+    // // Map a page in our OWN vaddress space to store child's paging state struct,
+    // // note the use of the child ptable's capability, save a reference to it
+    // err = paging_map_frame_attr_offset(&current, si.st, BASE_PAGE_SIZE,
+    //                                    root, 0, VREGION_FLAGS_READ_WRITE);
+    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in parent page table");
 
-    // Use it to create paging state for child
-    paging_init_state_foreign(child_state, cnoderef.cnode, root, get_default_slot_allocator());
+    // // Use it to create paging state for child
+    // paging_init_state_foreign(child_state, cnoderef.cnode, root, get_default_slot_allocator());
 
-    // Make child inherit its own paging_state struct by mapping its second page to the 
-    // same page in the parent, leaving first empty for NULL
-    err = paging_map_fixed_attr_offset(child_state, BASE_PAGE_SIZE, root, BASE_PAGE_SIZE, 
-                                       0, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in child page table");
+    // // Make child inherit its own paging_state struct by mapping its second page to the 
+    // // same page in the parent, leaving first empty for NULL
+    // err = paging_map_fixed_attr_offset(child_state, BASE_PAGE_SIZE, root, BASE_PAGE_SIZE, 
+    //                                    0, VREGION_FLAGS_READ_WRITE);
+    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in child page table");
 
-    struct capref child_frame = {
-        .cnode = cnode_module, // not certain this is the right thing
-        .slot = module->mrmod_slot,
-    };
+    // struct capref child_frame = {
+    //     .cnode = cnode_module, // not certain this is the right thing
+    //     .slot = module->mrmod_slot,
+    // };
     return -1;
 }
 

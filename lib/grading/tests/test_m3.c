@@ -148,7 +148,7 @@ static void spawn_list(void)
 errval_t grading_run_tests_processes(void)
 {
     if (grading_options.m3_subtest_run == 0) {
-        return SYS_ERR_OK;
+        //return SYS_ERR_OK;
     }
 
     // run them on core 0 only, core 1 tests come in M5 / M6

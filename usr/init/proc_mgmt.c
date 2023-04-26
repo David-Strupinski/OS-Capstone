@@ -107,12 +107,17 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     (void)capv;
     (void)core;
     (void)pid;
-    //struct spawninfo si;
-    //(void)spawn_load_with_bootinfo(&si, bi, path, 23);
-    struct mem_region* module = multiboot_find_module(bi, argv[0]);
+    struct spawninfo si;
     struct elfimg ei;
-    elfimg_init_from_module(&ei, module);    
-    //spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
+    //(void)spawn_load_with_bootinfo(&si, bi, path, 23);
+    printf("made it to spawn with caps\n");
+    spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
+    struct mem_region* module = multiboot_find_module(bi, argv[0]);
+    printf("one\n");
+    
+    elfimg_init_from_module(&ei, module);
+    printf("two\n");    
+    spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
     USER_PANIC("functionality not implemented\n");
     // TODO:
     //  - find the image

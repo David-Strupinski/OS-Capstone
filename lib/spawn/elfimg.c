@@ -31,7 +31,7 @@ void elfimg_init_from_module(struct elfimg *img, struct mem_region *module)
         .slot = module->mrmod_slot,
     };
     struct capability cap;
-    cap_direct_identify(child_frame, cap);
+    cap_direct_identify(child_frame, &cap);
     elfimg_init_with_cap(img, child_frame, cap.u.frame.bytes);
     printf("got here\n");
     // TODO:

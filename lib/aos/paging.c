@@ -159,6 +159,10 @@ errval_t paging_init_state_foreign(struct paging_state *st, lvaddr_t start_vaddr
     }
     st->root = pt;
 
+    // Initialize the actual L0 page table
+    errval_t err = vnode_create(root, ObjType_VNode_AARCH64_l0);
+    DEBUG_ERR(err, "paging_init_state_foreign: Failed to create hardware l0 page table");
+
     return SYS_ERR_OK;
 }
 

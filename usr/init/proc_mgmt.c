@@ -117,8 +117,6 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     }
    
     elfimg_init_from_module(&ei, module);
-    errval_t err = paging_map_frame_attr_offset(get_current_paging_state(), &ei.buf, ei.size, ei.mem, 0, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR(err, "looks like paging faield to map the elf image in our own vspace\n");
     spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
     
     // TODO:

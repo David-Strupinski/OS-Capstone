@@ -81,14 +81,6 @@ errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, con
     (void) name;
     (void) pid;
 
-    // Create the elfimg struct from the module
-    // si->binary_name = (char *) malloc(strlen(name) + 1);     // Probably need to free this later
-    // strncpy(si.binary_name, name, strlen(name) + 1);
-    // si.cmdline = NULL;
-    // si.pid = pid;
-    // si.state = SPAWN_STATE_SPAWNING;
-    // si.exitcode = 0;
-
     // char* strings = multiboot_module_opts(module);
     
     // printf("This is what multiboot_module_opts returns: %s\n", strings);
@@ -128,10 +120,6 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     (void)pid;
 
     // TODO: Implement the domain spawning
-    // - Initialize the spawn_info struct
-    // - Map the elfimg into the address space
-    // - Setup the child's cspace
-    // - Setup the child's vspace
     // - Load the ELF binary
     // - Setup the dispatcher
     // - Setup the environment
@@ -139,12 +127,94 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // - Set the spawn state
     printf("Made it into spawn_load_with_caps (lower level)----------------------------------------------\n");
 
+    // Initialize the spawn_info struct
+    si->binary_name = (char *) malloc(strlen(argv[0]) + 1);
+    strncpy(si->binary_name, argv[0], strlen(argv[0]) + 1);
+    si->cmdline = NULL;
+    si->pid = pid;
+    si->state = SPAWN_STATE_SPAWNING;
+    si->exitcode = 0;
 
-    // Cleave off some physical memory from parent for child
-    // err = cnode_create_l1(&si.root, &si.cnoderef);
-    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l1 page table");
-    // err = cnode_create_foreign_l2(si.root, 0, si.cnoderef);     // in first slot of l1
-    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to create child l2 page table");
+    // Map the elfimg into the address space
+    errval_t err = paging_map_frame_attr_offset(get_current_paging_state(), &img->buf, img->size, 
+                                                img->mem, 0, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR(err, "looks like paging failed to map the elf image in our own vspace\n");
+
+
+    // Setup the child's cspace
+
+    // Create child l1 
+    err = cnode_create_l1(&si->root, &si->root_cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child l1 pg tbl");
+
+    // Create child ROOTCN_SLOT_TASKCN L2 page table
+    err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_TASKCN, &si->rootcn_slot_taskcn_cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_TASKCN L2 pg tbl");
+
+    si->taskcn_slot_dispatcher.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_dispatcher.slot = TASKCN_SLOT_DISPATCHER;
+    err = dispatcher_create(si->taskcn_slot_dispatcher);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child dispatcher capability");
+
+    si->taskcn_slot_selfep.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_selfep.slot = TASKCN_SLOT_SELFEP;
+
+    struct capability dispcap;
+    err = cap_direct_identify(si->taskcn_slot_dispatcher, &dispcap);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to access child dispatcher capability");
+    err = cap_retype(si->taskcn_slot_selfep, si->taskcn_slot_dispatcher, 0, ObjType_EndPointLMP, 
+                     dispcap.u.frame.bytes);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child self reference capability");
+
+    si->taskcn_slot_rootcn.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_rootcn.slot = TASKCN_SLOT_ROOTCN;
+    // TODO: create capability
+
+    si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_dispframe.slot = TASKCN_SLOT_DISPFRAME;
+    // TODO: create capability
+
+    si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_argspage.slot = TASKCN_SLOT_ARGSPAGE;
+    // TODO: create capability
+
+    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_earlymem.slot = TASKCN_SLOT_EARLYMEM;
+    // TODO: create capability
+
+    // Create child ROOTCN_SLOT_ALLOC_0 L2 page table
+    err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC0, 
+                                  &si->rootcn_slot_alloc_0_cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_ALLOC_0 L2 pg tbl");
+
+    // Create child ROOTCN_SLOT_ALLOC_1 L2 page table
+    err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC1, 
+                                  &si->rootcn_slot_alloc_1_cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_ALLOC_1 L2 pg tbl");
+
+    // Create child ROOTCN_SLOT_ALLOC_2 L2 page table
+    err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC2, 
+                                  &si->rootcn_slot_alloc_2_cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_ALLOC_2 L2 pg tbl");
+
+    // Create child ROOTCN_SLOT_PAGECN L2 page table
+    err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_PAGECN, &si->rootcn_slot_pagecn_cnoderef);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_PAGECN L2 pg tbl");
+    si->rootcn_slot_pagecn_slot0.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->rootcn_slot_pagecn_slot0.slot = 0;
+    // TODO: create capability possibly
+
+
+    // Setup the child's vspace
+
+    struct capref child_pgtbl_cap_root;
+    err = cap_copy(child_pgtbl_cap_root, si->rootcn_slot_pagecn_slot0);
+    DEBUG_ERR(err, "spawn_load_with_caps: Failed to copy child's l0 page table permission");
+
+    // TODO: mapping to vaddr PAGE_SIZE right now (skip first page), change if needed
+    err = paging_init_state_foreign(si->st, PAGE_SIZE, child_pgtbl_cap_root, 
+                                    get_default_slot_allocator());
+    DEBUG_ERR(err, "spawn_load_with_caps: paging_init_state_foreign failed");
 
     // // Map a page in our OWN vaddress space to store child's paging state struct,
     // // note the use of the child ptable's capability, save a reference to it
@@ -152,8 +222,6 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     //                                    root, 0, VREGION_FLAGS_READ_WRITE);
     // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in parent page table");
 
-    // // Use it to create paging state for child
-    // paging_init_state_foreign(child_state, cnoderef.cnode, root, get_default_slot_allocator());
 
     // // Make child inherit its own paging_state struct by mapping its second page to the 
     // // same page in the parent, leaving first empty for NULL

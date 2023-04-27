@@ -77,7 +77,7 @@ struct spawninfo {
     struct capref root;
     struct cnoderef root_cnoderef;
 
-    // Capref & cnoderef to child ROOTCN_SLOT_TASKCN L2 node
+    // Cnoderef to child ROOTCN_SLOT_TASKCN L2 node, required caprefs
     struct cnoderef rootcn_slot_taskcn_cnoderef;
     struct capref taskcn_slot_selfep;
     struct capref taskcn_slot_dispatcher;
@@ -86,19 +86,18 @@ struct spawninfo {
     struct capref taskcn_slot_argspage;
     struct capref taskcn_slot_earlymem;
 
-    // Capref & cnoderef to child ROOTCN_SLOT_ALLOC_0 L2 node
+    // Cnoderef to child ROOTCN_SLOT_ALLOC_0 L2 node
     struct cnoderef rootcn_slot_alloc_0_cnoderef;
 
-    // Capref & cnoderef to child ROOTCN_SLOT_ALLOC_1 L2 node
+    // Cnoderef to child ROOTCN_SLOT_ALLOC_1 L2 node
     struct cnoderef rootcn_slot_alloc_1_cnoderef;
 
-    // Capref & cnoderef to child ROOTCN_SLOT_ALLOC_2 L2 node
+    // Cnoderef to child ROOTCN_SLOT_ALLOC_2 L2 node
     struct cnoderef rootcn_slot_alloc_2_cnoderef;
 
-    // Capref & cnoderef to child ROOTCN_SLOT_PAGECN L2 node
+    // Cnoderef to child ROOTCN_SLOT_PAGECN L2 node, capref to slot 0
     struct cnoderef rootcn_slot_pagecn_cnoderef;
     struct capref rootcn_slot_pagecn_slot0;
-    // Todo: really? you want to add more caprefs to more page tables?
 
     // Child's paging state
     struct paging_state *st;

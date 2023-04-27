@@ -147,7 +147,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cnode_create_l1(&si->root, &si->root_cnoderef);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child l1 pg tbl");
 
-    // Create child ROOTCN_SLOT_TASKCN L2 page table
+    // Create child ROOTCN_SLOT_TASKCN L2 page table, fill required capabilities
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_TASKCN, &si->rootcn_slot_taskcn_cnoderef);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_TASKCN L2 pg "
                            "tbl");
@@ -170,19 +170,18 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     si->taskcn_slot_rootcn.cnode = si->rootcn_slot_taskcn_cnoderef;
     si->taskcn_slot_rootcn.slot = TASKCN_SLOT_ROOTCN;
-    // TODO: create capability
+    err = cap_copy(si->taskcn_slot_rootcn, si->root);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to copy l1 cnode capability to child"
+                           "process");
 
-    si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;      // Cap is created later
     si->taskcn_slot_dispframe.slot = TASKCN_SLOT_DISPFRAME;
-    // TODO: create capability
 
-    si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef; // TODO: Create cap, or later?
     si->taskcn_slot_argspage.slot = TASKCN_SLOT_ARGSPAGE;
-    // TODO: create capability
 
-    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef; // TODO: Create cap, or later?
     si->taskcn_slot_earlymem.slot = TASKCN_SLOT_EARLYMEM;
-    // TODO: create capability
 
     // Create child ROOTCN_SLOT_ALLOC_0 L2 page table
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC0, 
@@ -202,23 +201,18 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_ALLOC_2 L2 pg "
                            "tbl");
 
-    // Create child ROOTCN_SLOT_PAGECN L2 page table
+    // Create child ROOTCN_SLOT_PAGECN L2 page table, capref to child's l0 page table
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_PAGECN, &si->rootcn_slot_pagecn_cnoderef);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_PAGECN L2 pg "
                            "tbl");
     si->rootcn_slot_pagecn_slot0.cnode = si->rootcn_slot_taskcn_cnoderef;
     si->rootcn_slot_pagecn_slot0.slot = 0;
-    // TODO: create capability possibly
 
 
     // Setup the child's vspace
 
-    struct capref child_pgtbl_cap_root;
-    err = cap_copy(child_pgtbl_cap_root, si->rootcn_slot_pagecn_slot0);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to copy child's l0 page table permission");
-
     // TODO: mapping to vaddr PAGE_SIZE right now (skip first page), change if needed
-    err = paging_init_state_foreign(si->st, BASE_PAGE_SIZE, child_pgtbl_cap_root, 
+    err = paging_init_state_foreign(si->st, BASE_PAGE_SIZE, si->rootcn_slot_pagecn_slot0, 
                                     get_default_slot_allocator());
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: paging_init_state_foreign failed");
 

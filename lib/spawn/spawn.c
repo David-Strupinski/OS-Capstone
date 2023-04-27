@@ -177,11 +177,15 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;      // Cap is created later
     si->taskcn_slot_dispframe.slot = TASKCN_SLOT_DISPFRAME;
 
-    si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef; // TODO: Create cap, or later?
+    si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;       // Args are filled later
     si->taskcn_slot_argspage.slot = TASKCN_SLOT_ARGSPAGE;
+    err = ram_alloc(&si->taskcn_slot_argspage, BASE_PAGE_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create args page capability");
 
-    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef; // TODO: Create cap, or later?
+    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;
     si->taskcn_slot_earlymem.slot = TASKCN_SLOT_EARLYMEM;
+    err = ram_alloc(&si->taskcn_slot_earlymem, BASE_PAGE_SIZE * 256);        // see ram_alloc.c:175
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create early mem capability");
 
     // Create child ROOTCN_SLOT_ALLOC_0 L2 page table
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC0, 

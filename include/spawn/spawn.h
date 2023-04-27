@@ -100,7 +100,7 @@ struct spawninfo {
     struct capref rootcn_slot_pagecn_slot0;
 
     // Child's paging state
-    struct paging_state *st;
+    struct paging_state st;
 };
 
 

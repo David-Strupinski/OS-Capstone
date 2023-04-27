@@ -212,7 +212,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // Setup the child's vspace
 
     // TODO: mapping to vaddr PAGE_SIZE right now (skip first page), change if needed
-    err = paging_init_state_foreign(si->st, BASE_PAGE_SIZE, si->rootcn_slot_pagecn_slot0, 
+    err = paging_init_state_foreign(&si->st, BASE_PAGE_SIZE, si->rootcn_slot_pagecn_slot0, 
                                     get_default_slot_allocator());
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: paging_init_state_foreign failed");
 

@@ -241,6 +241,26 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 }
 
 /**
+ * @brief Allocates memory for a section of ELF image in a new process, 
+ *        injects it into the new process's vspace
+ *
+ * @param[in]  state a struct that the allocator can use to keep track of which pages were mapped.
+ *                   set to null if not used.
+ * @param[in]  base  address in child's vspace to start mapping section
+ * @param[in]  size  size of section in bytes
+ * @param[in]  flags permissions of new process to the newly allocated section
+ * @param[out] ret   pointer to mapped section of parent vspace, which is doubly mapped to
+ *                   child vspace and which the ELF library will use to write the 
+ *                   ELF section contents
+ *
+ * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
+ */
+errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
+                                     uint32_t flags, void **ret) {
+
+}
+
+/**
  * @brief starts the execution of the new process by making it runnable
  *
  * @param[in] si   spawninfo structure of the constructed process

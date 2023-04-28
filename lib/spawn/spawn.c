@@ -182,10 +182,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = ram_alloc(&si->taskcn_slot_argspage, BASE_PAGE_SIZE);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create args page capability");
 
-    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;       // Cap is created later
     si->taskcn_slot_earlymem.slot = TASKCN_SLOT_EARLYMEM;
-    err = ram_alloc(&si->taskcn_slot_earlymem, BASE_PAGE_SIZE * 256);        // see ram_alloc.c:175
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create early mem capability");
 
     // Create child ROOTCN_SLOT_ALLOC_0 L2 page table
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC0, 
@@ -255,9 +253,25 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
  *
  * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
  */
-errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
+errval_t spawn_elf_section_allocator(struct spawninfo *state, genvaddr_t base, size_t size, 
                                      uint32_t flags, void **ret) {
 
+    // Create capability to physical memory for section in child process (see ram_alloc.c:175)
+    // Warning: overwrites old RAM capability if one was there
+    err = ram_alloc(&si->taskcn_slot_earlymem, MAX(BASE_PAGE_SIZE * 256, size));
+    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to create an early mem capability");
+
+    // Map physical memory into child proc
+
+    // Parse elf flags
+
+    err = paging_map_fixed_attr_offset(&state->st, base, si->taskcn_slot_earlymem, 
+                                       size, 0, /* flags */);
+    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into child process");
+
+    // Map physical memory into parent proc
+
+    // Other stuff?
 }
 
 /**

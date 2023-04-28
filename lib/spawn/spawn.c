@@ -360,7 +360,12 @@ errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size,
         temp_flags |= VREGION_FLAGS_READ;
     }
     
-    // Map newly allocated frame cap into child vspace
+    // Map newly allocated frame cap into child vspace. We do not support mapping above 1/4 of the
+    // child's vaddr space.
+    if (base + size > ((uint64_t)1)<<46) {
+        printf("Oh noes! This ELF section is addressed to high! >:-(\n");
+        return SPAWN_ERR_ELF_MAP;
+    }
     err = paging_map_fixed_attr_offset(&st->st, base, temp, size, 0, temp_flags);
     DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into child process");
     if (err_is_fail(err)) {

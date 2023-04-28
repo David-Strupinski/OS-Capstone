@@ -370,7 +370,7 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     errval_t err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
     if (err_is_fail(err)) {
         printf("vnode_map failed: %s\n", err_getstring(err));
-        return -1;
+        return err;
     }
     
 

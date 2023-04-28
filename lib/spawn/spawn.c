@@ -191,6 +191,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;       // Cap is created later
     si->taskcn_slot_earlymem.slot = TASKCN_SLOT_EARLYMEM;
+    err = ram_alloc(&si->taskcn_slot_earlymem, BASE_PAGE_SIZE * 256);       // see ram_alloc.c:175
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create early mem capability");
 
     // Create child ROOTCN_SLOT_ALLOC_0 L2 page table
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_SLOT_ALLOC0, 
@@ -298,21 +300,18 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
  */
 errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
                                      uint32_t flags, void **ret) {
-    
-    // TODO: TODO: TODO: !!!!!!!! This function is garbage, that ram alloc is not correct? maybe?
-    printf("spawn elf seciton allocator was called\n");
     errval_t err;
     struct spawninfo * st= (struct spawninfo*) state;
-    // Create capability to physical memory for section in child process (see ram_alloc.c:175)
-    // Warning: overwrites old RAM capability if one was there
-    
 
-    err = ram_alloc(&st->taskcn_slot_earlymem, size);
-    // size_t actual_size;
-    // err = frame_alloc(&st->taskcn_slot_earlymem, size, &actual_size);
-    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to create an early mem capability");
-   // size = actual_size;
-    // Map physical memory into child proc
+    // Create some physical memory to back this ELF section
+    size_t actual_size;
+    struct capref temp;
+    err = frame_alloc(&temp, size, &actual_size);
+    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to create frame capability");
+    if (err_is_fail(err)) {
+        return err;
+    }
+    size = actual_size;
 
     // Parse elf flags
     uint32_t temp_flags = 0;
@@ -325,13 +324,21 @@ errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size,
     if (flags & PF_R) {
         temp_flags |= VREGION_FLAGS_READ;
     }
-    // TODO: actually return if we get an error
-    // map into parent (our) vaddress space
-    err = paging_map_frame_attr_offset(get_current_paging_state(), ret, size, st->taskcn_slot_earlymem, 0, temp_flags);
-    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into parent vspace");
-    // map into child vaddress space
-    err = paging_map_fixed_attr_offset(&st->st, base, st->taskcn_slot_earlymem, size, 0, temp_flags);
+    
+    // Map newly allocated frame cap into child vspace
+    err = paging_map_fixed_attr_offset(&st->st, base, temp, size, 0, temp_flags);
     DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into child process");
+    if (err_is_fail(err)) {
+        return err;
+    }
+
+    // map into parent (our) vaddress space
+    err = paging_map_frame_attr_offset(get_current_paging_state(), ret, size, temp, 0, 
+                                       VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into parent vspace"); 
+    if (err_is_fail(err)) {
+        return err;
+    }
     
     return SYS_ERR_OK;
     // Other stuff?

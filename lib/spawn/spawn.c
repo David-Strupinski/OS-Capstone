@@ -314,23 +314,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     debug_print_cap_at_capref(NULL_CAP);
     err = invoke_dispatcher(frame, cap_dispatcher, cap1, cap2, cap3, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
-    // // Map a page in our OWN vaddress space to store child's paging state struct,
-    // // note the use of the child ptable's capability, save a reference to it
-    // err = paging_map_frame_attr_offset(&current, si.st, BASE_PAGE_SIZE,
-    //                                    root, 0, VREGION_FLAGS_READ_WRITE);
-    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in parent page table");
 
-
-    // // Make child inherit its own paging_state struct by mapping its second page to the 
-    // // same page in the parent, leaving first empty for NULL
-    // err = paging_map_fixed_attr_offset(child_state, BASE_PAGE_SIZE, root, BASE_PAGE_SIZE, 
-    //                                    0, VREGION_FLAGS_READ_WRITE);
-    // DEBUG_ERR(err, "spawn_load_with_bootinfo: Failed to map pgstruct page in child page table");
-
-    // struct capref child_frame = {
-    //     .cnode = cnode_module, // not certain this is the right thing
-    //     .slot = module->mrmod_slot,
-    // };
     return SYS_ERR_OK;
 }
 

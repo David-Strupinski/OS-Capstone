@@ -69,7 +69,7 @@ errval_t paging_init_state(struct paging_state *st, lvaddr_t start_vaddr,
  * @return SYS_ERR_OK on success, or LIB_ERR_* on failure
  */
 errval_t paging_init_state_foreign(struct paging_state *st, lvaddr_t start_vaddr,
-                                   struct capref pdir, struct slot_allocator *ca);
+                                   struct capref root, struct slot_allocator *ca);
 
 
 /**

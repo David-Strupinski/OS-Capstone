@@ -75,7 +75,7 @@ void debug_warn(const char *file, const char *func, int line, const char *msg, .
 #else
 #define DEBUG_PRINTF(fmt...)   debug_printf(fmt);
 #define DEBUG_ERR(err, msg...) debug_err(__FILE__, __FUNCTION__, __LINE__, err, msg)
-#define DEBUG_ERR_ON_FAIL(err, msg...) if (err_is_fail(err)) { DEBUG_ERR(err, msg); }
+#define DEBUG_ERR_ON_FAIL(err, msg...) if (err_is_fail(err)) { DEBUG_ERR(err, msg); return err; }
 #define DEBUG_WARN(msg...)     debug_warn(__FILE__, __FUNCTION__, __LINE__, msg)
 #include <aos/dispatch.h>
 #define HERE                                                                                       \

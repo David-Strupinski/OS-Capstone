@@ -22,7 +22,9 @@
 #include <spawn/argv.h>
 #include <spawn/elfimg.h>
 
-
+// Helper funciton declarations
+errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
+                                     uint32_t flags, void **ret);
 
 
 /**
@@ -127,6 +129,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // - Set the spawn state
     printf("Made it into spawn_load_with_caps (lower level)----------------------------------------------\n");
 
+
+    // Step 1 -----------------------------------------------------------------------------
     // Initialize the spawn_info struct
     si->binary_name = (char *) malloc(strlen(argv[0]) + 1);
     strncpy(si->binary_name, argv[0], strlen(argv[0]) + 1);
@@ -134,13 +138,16 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->pid = pid;
     si->state = SPAWN_STATE_SPAWNING;
     si->exitcode = 0;
+    printf("finished step 1\n");
 
+    // Step 2 -----------------------------------------------------------------------------
     // Map the elfimg into the address space
     errval_t err = paging_map_frame_attr_offset(get_current_paging_state(), &img->buf, img->size, 
                                                 img->mem, 0, VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "looks like paging failed to map the elf image in our own vspace\n");
+    printf("finished step 2\n");
 
-
+    // Step 3 -----------------------------------------------------------------------------
     // Setup the child's cspace
 
     // Create child l1 
@@ -209,14 +216,50 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
                            "tbl");
     si->rootcn_slot_pagecn_slot0.cnode = si->rootcn_slot_taskcn_cnoderef;
     si->rootcn_slot_pagecn_slot0.slot = 0;
+    printf("finished step 3\n");
 
-
+    // Step 4 -----------------------------------------------------------------------------
     // Setup the child's vspace
 
     // TODO: mapping to vaddr PAGE_SIZE right now (skip first page), change if needed
-    err = paging_init_state_foreign(&si->st, BASE_PAGE_SIZE, si->rootcn_slot_pagecn_slot0, 
+    // (I think it is fine to map at BASE_PAGE_SIZE)
+    struct capref parent_l0_table;
+    err = slot_alloc(&parent_l0_table);
+    DEBUG_ERR_ON_FAIL(err, "slot alloc failed to give a slot for our L0 page table\n");
+
+    err = vnode_create(parent_l0_table, ObjType_VNode_AARCH64_l0);
+    DEBUG_ERR_ON_FAIL(err, "failed to create a new vnode for our child's L0 page table\n");
+
+    err = cap_copy(si->rootcn_slot_pagecn_slot0, parent_l0_table);
+    DEBUG_ERR_ON_FAIL(err, "failed to copy capref from parent L0 table to child L0 table\n");
+
+    err = paging_init_state_foreign(&si->st, BASE_PAGE_SIZE, parent_l0_table, 
                                     get_default_slot_allocator());
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: paging_init_state_foreign failed");
+    printf("finished step 4\n");
+
+    // Step 5 -----------------------------------------------------------------------------
+    // parse the ELF file
+    
+    // call elf_load
+    genvaddr_t * endpoint = NULL;
+    printf("Img size: %lli\n", img->size);
+    printf("img->buf: %p\n", img->buf);
+    err = elf_load(EM_AARCH64, spawn_elf_section_allocator, si, (genvaddr_t)img->buf, img->size, endpoint);
+    DEBUG_ERR_ON_FAIL(err, "elf load failed :(\n");
+    printf("got through elf load\n");
+
+    // get the got
+    struct Elf64_Shdr *got = elf64_find_section_header_name((genvaddr_t) img->buf, img->size, ".got");
+    if (got == NULL) {
+        printf ("darn\n");
+        return -1;
+    }
+    // got the got
+    printf("finished step 5\n");;
+    
+    // TODO: more steps
+    
 
     // // Map a page in our OWN vaddress space to store child's paging state struct,
     // // note the use of the child ptable's capability, save a reference to it
@@ -253,25 +296,46 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
  *
  * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
  */
-errval_t spawn_elf_section_allocator(struct spawninfo *state, genvaddr_t base, size_t size, 
+errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
                                      uint32_t flags, void **ret) {
-
+    
+    // TODO: TODO: TODO: !!!!!!!! This function is garbage, that ram alloc is not correct? maybe?
+    printf("spawn elf seciton allocator was called\n");
+    errval_t err;
+    struct spawninfo * st= (struct spawninfo*) state;
     // Create capability to physical memory for section in child process (see ram_alloc.c:175)
     // Warning: overwrites old RAM capability if one was there
-    err = ram_alloc(&si->taskcn_slot_earlymem, MAX(BASE_PAGE_SIZE * 256, size));
-    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to create an early mem capability");
+    
 
+    err = ram_alloc(&st->taskcn_slot_earlymem, size);
+    // size_t actual_size;
+    // err = frame_alloc(&st->taskcn_slot_earlymem, size, &actual_size);
+    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to create an early mem capability");
+   // size = actual_size;
     // Map physical memory into child proc
 
     // Parse elf flags
-
-    err = paging_map_fixed_attr_offset(&state->st, base, si->taskcn_slot_earlymem, 
-                                       size, 0, /* flags */);
+    uint32_t temp_flags = 0;
+    if (flags & PF_X)  {
+        temp_flags |= VREGION_FLAGS_EXECUTE;
+    }
+    if (flags & PF_W) {
+        temp_flags |= VREGION_FLAGS_WRITE;
+    }
+    if (flags & PF_R) {
+        temp_flags |= VREGION_FLAGS_READ;
+    }
+    // TODO: actually return if we get an error
+    // map into parent (our) vaddress space
+    err = paging_map_frame_attr_offset(get_current_paging_state(), ret, size, st->taskcn_slot_earlymem, 0, temp_flags);
+    DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into parent vspace");
+    // map into child vaddress space
+    err = paging_map_fixed_attr_offset(&st->st, base, st->taskcn_slot_earlymem, size, 0, temp_flags);
     DEBUG_ERR_ON_FAIL(err, "spawn_elf_section_allocator: Failed to map mem into child process");
-
-    // Map physical memory into parent proc
-
+    
+    return SYS_ERR_OK;
     // Other stuff?
+    // TODO: potentially support unmapping with more book keeping
 }
 
 /**

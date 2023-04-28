@@ -244,12 +244,10 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // parse the ELF file
     
     // call elf_load
-    genvaddr_t * endpoint = NULL;
-    printf("Img size: %lli\n", img->size);
-    printf("img->buf: %p\n", img->buf);
-    err = elf_load(EM_AARCH64, spawn_elf_section_allocator, si, (genvaddr_t)img->buf, img->size, endpoint);
+    genvaddr_t endpoint;
+    
+    err = elf_load(EM_AARCH64, spawn_elf_section_allocator, si, (genvaddr_t)img->buf, img->size, &endpoint);
     DEBUG_ERR_ON_FAIL(err, "elf load failed :(\n");
-    printf("got through elf load\n");
 
     // get the got
     struct Elf64_Shdr *got = elf64_find_section_header_name((genvaddr_t) img->buf, img->size, ".got");
@@ -260,9 +258,62 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // got the got
     printf("finished step 5\n");;
     
-    // TODO: more steps
-    
 
+    // Step 6 -----------------------------------------------------------------------------
+    struct capref frame;
+    err = frame_alloc(&frame, DISPATCHER_FRAME_SIZE, NULL);
+    genvaddr_t buf_c;
+    genvaddr_t buf_p;
+
+    err = paging_map_frame_attr_offset(&si->st, (void**)(&buf_c), 
+                                       DISPATCHER_FRAME_SIZE, frame, 0, 
+                                       VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");
+
+    err = paging_map_frame_attr_offset(get_current_paging_state(), (void**)(&buf_p), 
+                                       DISPATCHER_FRAME_SIZE, frame, 0, 
+                                       VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping into the parent failed\n");
+
+    struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic(buf_p);
+    struct dispatcher_generic *disp_gen = get_dispatcher_generic(buf_p);
+
+    // arch_registers_state_t *enabled_area  = dispatcher_get_enabled_save_area(buf_p);
+    arch_registers_state_t *disabled_area = dispatcher_get_disabled_save_area(buf_p);
+
+    disp_gen->core_id = disp_get_core_id();
+    disp_gen->domain_id = disp_get_domain_id();
+    disp->udisp = (lvaddr_t)buf_c;
+    disp->disabled = 1;
+    strncpy(disp->name, si->binary_name, DISP_NAME_LEN);
+    disabled_area->named.pc = (lvaddr_t) endpoint;
+    // TODO: verify arguments of above and bellow
+    armv8_set_registers(buf_p, (lvaddr_t) endpoint, (lvaddr_t) got->sh_addr);
+    disp_gen->eh_frame = 0;
+    disp_gen->eh_frame_size = 0;
+    disp_gen->eh_frame_hdr = 0;
+    disp_gen->eh_frame_hdr_size = 0;
+
+    printf("finished step 6\n");
+
+
+    // TODO: move step 7 to spawn start
+
+    // Step 7 -----------------------------------------------------------------------------
+    struct capref cap1;
+    err = slot_alloc(&cap1);
+    struct capref cap2;
+    err = slot_alloc(&cap2);
+    struct capref cap3;
+    err = slot_alloc(&cap3);
+    err = cap_copy(cap1, si->root);
+    err = cap_copy(cap2, si->rootcn_slot_pagecn_slot0);
+    err = cap_copy(cap3, si->taskcn_slot_dispatcher);
+    debug_print_cap_at_capref(cap1);
+    debug_print_cap_at_capref(cap2);
+    debug_print_cap_at_capref(NULL_CAP);
+    err = invoke_dispatcher(frame, cap_dispatcher, cap1, cap2, cap3, true);
+    DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
     // // Map a page in our OWN vaddress space to store child's paging state struct,
     // // note the use of the child ptable's capability, save a reference to it
     // err = paging_map_frame_attr_offset(&current, si.st, BASE_PAGE_SIZE,
@@ -280,7 +331,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     //     .cnode = cnode_module, // not certain this is the right thing
     //     .slot = module->mrmod_slot,
     // };
-    return -1;
+    return SYS_ERR_OK;
 }
 
 /**

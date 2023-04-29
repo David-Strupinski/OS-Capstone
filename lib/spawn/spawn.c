@@ -260,18 +260,17 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     
 
     // Step 6 -----------------------------------------------------------------------------
-    struct capref frame;
-    err = frame_alloc(&frame, DISPATCHER_FRAME_SIZE, NULL);
+    err = frame_alloc(&si->taskcn_slot_dispframe, DISPATCHER_FRAME_SIZE, NULL);
     genvaddr_t buf_c;
     genvaddr_t buf_p;
 
     err = paging_map_frame_attr_offset(&si->st, (void**)(&buf_c), 
-                                       DISPATCHER_FRAME_SIZE, frame, 0, 
+                                       DISPATCHER_FRAME_SIZE, si->taskcn_slot_dispframe, 0, 
                                        VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");
 
     err = paging_map_frame_attr_offset(get_current_paging_state(), (void**)(&buf_p), 
-                                       DISPATCHER_FRAME_SIZE, frame, 0, 
+                                       DISPATCHER_FRAME_SIZE, si->taskcn_slot_dispframe, 0, 
                                        VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the parent failed\n");
 
@@ -300,19 +299,20 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // TODO: move step 7 to spawn start
 
     // Step 7 -----------------------------------------------------------------------------
-    struct capref cap1;
-    err = slot_alloc(&cap1);
-    struct capref cap2;
-    err = slot_alloc(&cap2);
-    struct capref cap3;
-    err = slot_alloc(&cap3);
-    err = cap_copy(cap1, si->root);
-    err = cap_copy(cap2, si->rootcn_slot_pagecn_slot0);
-    err = cap_copy(cap3, si->taskcn_slot_dispatcher);
-    debug_print_cap_at_capref(cap1);
-    debug_print_cap_at_capref(cap2);
-    debug_print_cap_at_capref(NULL_CAP);
-    err = invoke_dispatcher(frame, cap_dispatcher, cap1, cap2, cap3, true);
+    struct capref disp_cap_copy;
+    err = slot_alloc(&disp_cap_copy);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to slot alloc");
+    err = cap_copy(disp_cap_copy, si->taskcn_slot_dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to gain access to child dispatcher cap");
+
+    struct capref root_cap_copy;
+    err = slot_alloc(&root_cap_copy);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to slot alloc");
+    err = cap_copy(root_cap_copy, si->root);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to gain access to child root cap");
+
+    err = invoke_dispatcher(disp_cap_copy, cap_dispatcher, root_cap_copy, 
+                            si->rootcn_slot_pagecn_slot0, si->taskcn_slot_dispframe, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
 
     return SYS_ERR_OK;

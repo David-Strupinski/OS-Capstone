@@ -151,6 +151,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // Setup the child's cspace
 
     // Create child l1 
+    err = slot_alloc(&si->root);
+    DEBUG_ERR_ON_FAIL(err, "could not allocate slot for child l1 cspace");
     err = cnode_create_l1(&si->root, &si->root_cnoderef);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child l1 pg tbl");
 
@@ -260,25 +262,27 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     
 
     // Step 6 -----------------------------------------------------------------------------
-    err = frame_alloc(&si->taskcn_slot_dispframe, DISPATCHER_FRAME_SIZE, NULL);
-    genvaddr_t buf_c;
-    genvaddr_t buf_p;
+    struct capref frame;
+    err = frame_alloc(&frame, DISPATCHER_FRAME_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "could not allocate frame for dispatcher\n");
+    void *buf_c;
+    void *buf_p;
 
-    err = paging_map_frame_attr_offset(&si->st, (void**)(&buf_c), 
-                                       DISPATCHER_FRAME_SIZE, si->taskcn_slot_dispframe, 0, 
-                                       VREGION_FLAGS_READ_WRITE);
+    err = paging_map_frame_attr(&si->st, &buf_c, 
+                                DISPATCHER_FRAME_SIZE, frame, 
+                                VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");
 
-    err = paging_map_frame_attr_offset(get_current_paging_state(), (void**)(&buf_p), 
-                                       DISPATCHER_FRAME_SIZE, si->taskcn_slot_dispframe, 0, 
-                                       VREGION_FLAGS_READ_WRITE);
+    err = paging_map_frame_attr(get_current_paging_state(), &buf_p, 
+                                DISPATCHER_FRAME_SIZE, frame, 
+                                VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the parent failed\n");
 
-    struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic(buf_p);
-    struct dispatcher_generic *disp_gen = get_dispatcher_generic(buf_p);
+    struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic((dispatcher_handle_t)buf_p);
+    struct dispatcher_generic *disp_gen = get_dispatcher_generic((dispatcher_handle_t)buf_p);
 
     // arch_registers_state_t *enabled_area  = dispatcher_get_enabled_save_area(buf_p);
-    arch_registers_state_t *disabled_area = dispatcher_get_disabled_save_area(buf_p);
+    arch_registers_state_t *disabled_area = dispatcher_get_disabled_save_area((dispatcher_handle_t)buf_p);
 
     disp_gen->core_id = disp_get_core_id();
     disp_gen->domain_id = disp_get_domain_id();
@@ -287,7 +291,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     strncpy(disp->name, si->binary_name, DISP_NAME_LEN);
     disabled_area->named.pc = (lvaddr_t) endpoint;
     // TODO: verify arguments of above and bellow
-    armv8_set_registers(buf_p, (lvaddr_t) endpoint, (lvaddr_t) got->sh_addr);
+    armv8_set_registers((dispatcher_handle_t)buf_p, (lvaddr_t) endpoint, (lvaddr_t) got->sh_addr);
     disp_gen->eh_frame = 0;
     disp_gen->eh_frame_size = 0;
     disp_gen->eh_frame_hdr = 0;
@@ -299,20 +303,18 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // TODO: move step 7 to spawn start
 
     // Step 7 -----------------------------------------------------------------------------
-    struct capref disp_cap_copy;
-    err = slot_alloc(&disp_cap_copy);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to slot alloc");
-    err = cap_copy(disp_cap_copy, si->taskcn_slot_dispatcher);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to gain access to child dispatcher cap");
-
-    struct capref root_cap_copy;
-    err = slot_alloc(&root_cap_copy);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to slot alloc");
-    err = cap_copy(root_cap_copy, si->root);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: failed to gain access to child root cap");
-
-    err = invoke_dispatcher(disp_cap_copy, cap_dispatcher, root_cap_copy, 
-                            si->rootcn_slot_pagecn_slot0, si->taskcn_slot_dispframe, true);
+    // struct capref cap1;
+    // err = slot_alloc(&cap1);
+    // err = cap_copy(cap1, si->root);
+    //struct capref cap2;
+    //err = slot_alloc(&cap2);
+    // struct capref cap3;
+    // err = slot_alloc(&cap3);
+    //err = cap_copy(cap2, si->rootcn_slot_pagecn_slot0);
+    // err = cap_copy(cap3, si->taskcn_slot_dispatcher);
+    debug_print_cap_at_capref(si->rootcn_slot_pagecn_slot0);
+    debug_print_cap_at_capref(si->root);
+    err = invoke_dispatcher(frame, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, si->taskcn_slot_dispatcher, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
 
     return SYS_ERR_OK;
@@ -401,8 +403,8 @@ errval_t spawn_start(struct spawninfo *si)
     //  - check whether the process is in the right state (ready to be started)
     //  - invoke the dispatcher to make the process runnable
     //  - set the state to running
-    USER_PANIC("Not implemented");
-    return LIB_ERR_NOT_IMPLEMENTED;
+    //USER_PANIC("Not implemented");
+    return SYS_ERR_OK;
 }
 
 /**

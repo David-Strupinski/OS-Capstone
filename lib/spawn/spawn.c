@@ -150,7 +150,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // Step 3 -----------------------------------------------------------------------------
     // Setup the child's cspace
 
-    // Create child l1 
+    // Create child l1
     err = slot_alloc(&si->root);
     DEBUG_ERR_ON_FAIL(err, "could not allocate slot for child l1 cspace");
     err = cnode_create_l1(&si->root, &si->root_cnoderef);
@@ -161,10 +161,12 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_TASKCN L2 pg "
                            "tbl");
 
-    si->taskcn_slot_dispatcher.cnode = si->rootcn_slot_taskcn_cnoderef;
-    si->taskcn_slot_dispatcher.slot = TASKCN_SLOT_DISPATCHER;
+    err = slot_alloc(&si->taskcn_slot_dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "could not allocate slot for the dispatcher.");
     err = dispatcher_create(si->taskcn_slot_dispatcher);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child dispatcher capability");
+    // si->taskcn_slot_dispatcher.cnode = si->rootcn_slot_taskcn_cnoderef;
+    // si->taskcn_slot_dispatcher.slot = TASKCN_SLOT_DISPATCHER;
 
     si->taskcn_slot_selfep.cnode = si->rootcn_slot_taskcn_cnoderef;
     si->taskcn_slot_selfep.slot = TASKCN_SLOT_SELFEP;
@@ -218,7 +220,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cnode_create_foreign_l2(si->root, ROOTCN_SLOT_PAGECN, &si->rootcn_slot_pagecn_cnoderef);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_PAGECN L2 pg "
                            "tbl");
-    si->rootcn_slot_pagecn_slot0.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->rootcn_slot_pagecn_slot0.cnode = si->rootcn_slot_pagecn_cnoderef;
     si->rootcn_slot_pagecn_slot0.slot = 0;
     printf("finished step 3\n");
 
@@ -262,21 +264,29 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     
 
     // Step 6 -----------------------------------------------------------------------------
+    void *buf_c;  // The dispatcher's address in the child's vspace.
+    void *buf_p;  // The dispatcher's address in the parent's vspace.
+
+    // Allocate a space for the dispatcher frame.
+    // TODO: use/get rid of the actual dispatcher frame
     struct capref frame;
     err = frame_alloc(&frame, DISPATCHER_FRAME_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "could not allocate frame for dispatcher\n");
-    void *buf_c;
-    void *buf_p;
 
+    // Map the dispframe into the child's vspace.
     err = paging_map_frame_attr(&si->st, &buf_c, 
                                 DISPATCHER_FRAME_SIZE, frame, 
                                 VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");
 
+    // Map the dispframe into the parent's vspace.
     err = paging_map_frame_attr(get_current_paging_state(), &buf_p, 
                                 DISPATCHER_FRAME_SIZE, frame, 
                                 VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the parent failed\n");
+    
+    frame.cnode = si->rootcn_slot_taskcn_cnoderef;
+    frame.slot = TASKCN_SLOT_DISPFRAME;
 
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic((dispatcher_handle_t)buf_p);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic((dispatcher_handle_t)buf_p);
@@ -314,7 +324,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // err = cap_copy(cap3, si->taskcn_slot_dispatcher);
     debug_print_cap_at_capref(si->rootcn_slot_pagecn_slot0);
     debug_print_cap_at_capref(si->root);
-    err = invoke_dispatcher(frame, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, si->taskcn_slot_dispatcher, true);
+
+    err = invoke_dispatcher(si->taskcn_slot_dispatcher, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, frame, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
 
     return SYS_ERR_OK;

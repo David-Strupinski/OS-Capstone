@@ -73,34 +73,12 @@ struct spawninfo {
     //           e.g. references to the child's
     //           capabilities or paging state
 
-    // Capref & cnoderef to child L1 node
-    struct capref root;
-    struct cnoderef root_cnoderef;
-
-    // Cnoderef to child ROOTCN_SLOT_TASKCN L2 node, required caprefs
-    struct cnoderef rootcn_slot_taskcn_cnoderef;
-    struct capref taskcn_slot_selfep;
-    struct capref taskcn_slot_dispatcher;
-    struct capref taskcn_slot_rootcn;
-    struct capref taskcn_slot_dispframe;
-    struct capref taskcn_slot_argspage;
-    struct capref taskcn_slot_earlymem;
-
-    // Cnoderef to child ROOTCN_SLOT_ALLOC_0 L2 node
-    struct cnoderef rootcn_slot_alloc_0_cnoderef;
-
-    // Cnoderef to child ROOTCN_SLOT_ALLOC_1 L2 node
-    struct cnoderef rootcn_slot_alloc_1_cnoderef;
-
-    // Cnoderef to child ROOTCN_SLOT_ALLOC_2 L2 node
-    struct cnoderef rootcn_slot_alloc_2_cnoderef;
-
-    // Cnoderef to child ROOTCN_SLOT_PAGECN L2 node, capref to slot 0
-    struct cnoderef rootcn_slot_pagecn_cnoderef;
-    struct capref rootcn_slot_pagecn_slot0;
-
     // Child's paging state
-    struct paging_state st;
+    struct paging_state *st;
+
+    // elfimg data
+    struct mem_region *module;
+    void *module_data;
 };
 
 

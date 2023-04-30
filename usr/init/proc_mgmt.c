@@ -115,7 +115,10 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
         printf("multiboot_find_module failed to find %s\n", argv[0]);
         return SPAWN_ERR_FIND_MODULE;
     }
-   
+    
+    // added line bellow
+    si.module = module;
+
     elfimg_init_from_module(&ei, module);
     spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
     

@@ -169,7 +169,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;       // Args are filled later
     si->taskcn_slot_argspage.slot = TASKCN_SLOT_ARGSPAGE;
-    err = ram_alloc(&si->taskcn_slot_argspage, BASE_PAGE_SIZE);
+    err = ram_alloc(&si->taskcn_slot_argspage, ARGS_SIZE);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create args page capability");
 
     si->taskcn_slot_earlymem.cnode = si->rootcn_slot_taskcn_cnoderef;       // Cap is created later
@@ -305,10 +305,46 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     printf("finished step 6\n");
 
-
-    // TODO: move step 7 to spawn start
-
     // Step 7 -----------------------------------------------------------------------------
+
+    si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_argspage.slot = TASKCN_SLOT_ARGSPAGE;
+    err = frame_create(si->taskcn_slot_argspage, ARGS_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "frame create failed\n");
+
+    genvaddr_t args_page_addr_child;
+    err = paging_map_frame_attr(&si->st, ((void **)&args_page_addr_child), 
+                                ARGS_SIZE, si->taskcn_slot_argspage, 
+                                VREGION_FLAGS_READ_WRITE);
+
+    genvaddr_t args_page_addr_parent;
+    err = paging_map_frame_attr(get_current_paging_state(), ((void **)&args_page_addr_parent), 
+                                ARGS_SIZE, si->taskcn_slot_argspage, 
+                                VREGION_FLAGS_READ_WRITE);
+
+    struct spawn_domain_params *args = (struct spawn_domain_params *) args_page_addr_parent;
+    
+    memset((void *) args, 0, ARGS_SIZE);
+    args->argc = argc;
+    printf("before: %s\n", args->argv[0]);
+
+    //char *argv_data = (char*)args_page_addr_parent + sizeof(struct spawn_domain_params);
+    strcpy(((char*)( args_page_addr_child + sizeof(struct spawn_domain_params))) , "hello");
+    args->argv[0] =(char*)( args_page_addr_child + sizeof(struct spawn_domain_params));
+    printf("after: %s\n", args->argv[0]);
+    //strcpy((char *)args->argv[0], "hello");
+    args->argv[1] = NULL;
+    args->envp[0] = NULL;
+    args->pagesize = 0;
+    args->tls_init_base = NULL;
+    args->tls_init_len = 0;
+    args->tls_total_len = 0;
+    args->vspace_buf = NULL;
+    args->vspace_buf_len = 0;
+    
+    // TODO: move step 8 to spawn start
+
+    // Step 8 -----------------------------------------------------------------------------
     // struct capref cap1;
     // err = slot_alloc(&cap1);
     // err = cap_copy(cap1, si->root);
@@ -340,6 +376,13 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cap_copy(child_dispframe, si->taskcn_slot_dispframe);
     DEBUG_ERR_ON_FAIL(err, "couldn't copy dispframe into child.");
 
+    // struct capref child_argspage;
+    // child_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;
+    // child_argspage.slot = TASKCN_SLOT_ARGSPAGE;
+    // err = cap_copy(child_argspage, si->taskcn_slot_argspage);
+    // DEBUG_ERR_ON_FAIL(err, "couldn't copy argspage into child.");
+
+    printf("about to invoke dispatcher\n");
     err = invoke_dispatcher(si->taskcn_slot_dispatcher, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, child_dispframe, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
 

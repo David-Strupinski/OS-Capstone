@@ -161,32 +161,11 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child ROOTCN_SLOT_TASKCN L2 pg "
                            "tbl");
 
-    err = slot_alloc(&si->taskcn_slot_dispatcher);
-    DEBUG_ERR_ON_FAIL(err, "could not allocate slot for the dispatcher.");
-    err = dispatcher_create(si->taskcn_slot_dispatcher);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child dispatcher capability");
-    // si->taskcn_slot_dispatcher.cnode = si->rootcn_slot_taskcn_cnoderef;
-    // si->taskcn_slot_dispatcher.slot = TASKCN_SLOT_DISPATCHER;
-
-    si->taskcn_slot_selfep.cnode = si->rootcn_slot_taskcn_cnoderef;
-    si->taskcn_slot_selfep.slot = TASKCN_SLOT_SELFEP;
-
-    struct capability dispcap;
-    err = cap_direct_identify(si->taskcn_slot_dispatcher, &dispcap);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to access child dispatcher capability");
-    err = cap_retype(si->taskcn_slot_selfep, si->taskcn_slot_dispatcher, 0, ObjType_EndPointLMP, 
-                     dispcap.u.frame.bytes);
-    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child self reference "
-                           "capability");
-
     si->taskcn_slot_rootcn.cnode = si->rootcn_slot_taskcn_cnoderef;
     si->taskcn_slot_rootcn.slot = TASKCN_SLOT_ROOTCN;
     err = cap_copy(si->taskcn_slot_rootcn, si->root);
     DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to copy l1 cnode capability to child"
                            "process");
-
-    si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;      // Cap is created later
-    si->taskcn_slot_dispframe.slot = TASKCN_SLOT_DISPFRAME;
 
     si->taskcn_slot_argspage.cnode = si->rootcn_slot_taskcn_cnoderef;       // Args are filled later
     si->taskcn_slot_argspage.slot = TASKCN_SLOT_ARGSPAGE;
@@ -267,31 +246,50 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     void *buf_c;  // The dispatcher's address in the child's vspace.
     void *buf_p;  // The dispatcher's address in the parent's vspace.
 
+    err = slot_alloc(&si->taskcn_slot_dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "could not allocate slot for the dispatcher.");
+    err = dispatcher_create(si->taskcn_slot_dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child dispatcher capability");
+    // si->taskcn_slot_dispatcher.cnode = si->root_cnoderef;
+    // si->taskcn_slot_dispatcher.slot = TASKCN_SLOT_DISPATCHER;
+
+    si->taskcn_slot_selfep.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_selfep.slot = TASKCN_SLOT_SELFEP;
+
+    struct capability dispcap;
+    err = cap_direct_identify(si->taskcn_slot_dispatcher, &dispcap);
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to access child dispatcher capability");
+    err = cap_retype(si->taskcn_slot_selfep, si->taskcn_slot_dispatcher, 0, ObjType_EndPointLMP, 
+                     0);  // dispcap.u.frame.bytes
+    DEBUG_ERR_ON_FAIL(err, "spawn_load_with_caps: Failed to create child self reference "
+                           "capability");
+
     // Allocate a space for the dispatcher frame.
     // TODO: use/get rid of the actual dispatcher frame
-    struct capref frame;
-    err = frame_alloc(&frame, DISPATCHER_FRAME_SIZE, NULL);
+    //struct capref frame;
+    err = frame_alloc(&si->taskcn_slot_dispframe, DISPATCHER_FRAME_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "could not allocate frame for dispatcher\n");
-
-    // Map the dispframe into the child's vspace.
-    err = paging_map_frame_attr(&si->st, &buf_c, 
-                                DISPATCHER_FRAME_SIZE, frame, 
-                                VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");
 
     // Map the dispframe into the parent's vspace.
     err = paging_map_frame_attr(get_current_paging_state(), &buf_p, 
-                                DISPATCHER_FRAME_SIZE, frame, 
+                                DISPATCHER_FRAME_SIZE, si->taskcn_slot_dispframe, 
                                 VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the parent failed\n");
-    
-    frame.cnode = si->rootcn_slot_taskcn_cnoderef;
-    frame.slot = TASKCN_SLOT_DISPFRAME;
+
+    // Map the dispframe into the child's vspace and copy the capability.
+    err = paging_map_frame_attr(&si->st, &buf_c, 
+                                DISPATCHER_FRAME_SIZE, si->taskcn_slot_dispframe, 
+                                VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");    
+
+    //frame.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;
+    si->taskcn_slot_dispframe.slot = TASKCN_SLOT_DISPFRAME;
 
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic((dispatcher_handle_t)buf_p);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic((dispatcher_handle_t)buf_p);
 
-    // arch_registers_state_t *enabled_area  = dispatcher_get_enabled_save_area(buf_p);
+    // arch_registers_state_t *enabled_area = dispatcher_get_enabled_save_area((dispatcher_handle_t)buf_p);
     arch_registers_state_t *disabled_area = dispatcher_get_disabled_save_area((dispatcher_handle_t)buf_p);
 
     disp_gen->core_id = disp_get_core_id();
@@ -299,8 +297,9 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     disp->udisp = (lvaddr_t)buf_c;
     disp->disabled = 1;
     strncpy(disp->name, si->binary_name, DISP_NAME_LEN);
-    disabled_area->named.pc = (lvaddr_t) endpoint;
-    // TODO: verify arguments of above and bellow
+    disabled_area->named.pc = (lvaddr_t)got->sh_addr;// endpoint;
+
+    // TODO: verify arguments of above and below
     armv8_set_registers((dispatcher_handle_t)buf_p, (lvaddr_t) endpoint, (lvaddr_t) got->sh_addr);
     disp_gen->eh_frame = 0;
     disp_gen->eh_frame_size = 0;
@@ -325,7 +324,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     debug_print_cap_at_capref(si->rootcn_slot_pagecn_slot0);
     debug_print_cap_at_capref(si->root);
 
-    err = invoke_dispatcher(si->taskcn_slot_dispatcher, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, frame, true);
+    err = invoke_dispatcher(si->taskcn_slot_dispatcher, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, si->taskcn_slot_dispframe, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
 
     return SYS_ERR_OK;

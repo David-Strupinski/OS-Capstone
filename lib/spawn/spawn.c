@@ -114,6 +114,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
         .slot = si->module->mrmod_slot,
     };
     err = paging_map_frame_attr(get_current_paging_state(), &si->module_data, si->module->mrmod_size, elf_frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping elf frame");
 
     si->binary_name = (char*)argv[0];
 
@@ -126,31 +127,38 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     struct cnoderef child_task_cnode;
 
     err = cnode_create_l1(&cap_l1_cnode, NULL);
+    DEBUG_ERR_ON_FAIL(err, "creating l1 cnode");
     
     struct cnoderef *l2_slot_task_cnode = &child_task_cnode;
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_TASKCN, l2_slot_task_cnode);
+    DEBUG_ERR_ON_FAIL(err, "creating l2 slot task cnode");
 
     struct capref cap_l1_slot_cnode;
     cap_l1_slot_cnode.cnode = child_task_cnode,
     cap_l1_slot_cnode.slot = TASKCN_SLOT_ROOTCN,
     
     err = cap_copy(cap_l1_slot_cnode, cap_l1_cnode);
+    DEBUG_ERR_ON_FAIL(err, "copying l1 cnode to child");
 
     struct cnoderef l2_slot_page_cnode;
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_PAGECN, &l2_slot_page_cnode);
+    DEBUG_ERR_ON_FAIL(err, "creating l2 page cnode");
 
     struct cnoderef l2_slot_basepage_cnode;
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_BASE_PAGE_CN, &l2_slot_basepage_cnode);
+    DEBUG_ERR_ON_FAIL(err, "creating l2 base page cnode");
     
     // ram for earlymem
     struct capref some_ram;
-    ram_alloc(&some_ram, BASE_PAGE_SIZE * 256); // TODO CHECK THE SIZE
+    err = ram_alloc(&some_ram, BASE_PAGE_SIZE * 256); // TODO CHECK THE SIZE
+    DEBUG_ERR_ON_FAIL(err, "allocating ram for earlymem");
 
     struct capref child_earlymem = {
         .cnode = child_task_cnode,
         .slot  = TASKCN_SLOT_EARLYMEM
     };
-    cap_copy(child_earlymem, some_ram);
+    err = cap_copy(child_earlymem, some_ram);
+    DEBUG_ERR_ON_FAIL(err, "copying ram for earlymem to child");
 
     child_table.cnode = l2_slot_page_cnode;
     child_table.slot = 0;
@@ -161,17 +169,22 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     
     struct capref parent_version_of_child_table;
     err = slot_alloc(&parent_version_of_child_table);
+    DEBUG_ERR_ON_FAIL(err, "allocating slot for parent version of child table");
 
     err = vnode_create(child_table, ObjType_VNode_AARCH64_l0);
+    DEBUG_ERR_ON_FAIL(err, "creating vnode for child L0 table");
 
     err = cap_copy(parent_version_of_child_table, child_table);
+    DEBUG_ERR_ON_FAIL(err, "copying child L0 table to parent");
     
     si->st = malloc(sizeof(struct paging_state));
     if (si->st == NULL) {
-        return -1;
+        debug_printf("malloc failed\n");
+        return LIB_ERR_MALLOC_FAIL;
     }
 
     err = paging_init_state_foreign(si->st, BASE_PAGE_SIZE, parent_version_of_child_table, get_default_slot_allocator());
+    DEBUG_ERR_ON_FAIL(err, "initializing child paging state");
     
     // END SETUP VSPACE -----------------------------------------------------
 
@@ -180,8 +193,9 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     genvaddr_t entry_pt;
     
     err = elf_load(EM_AARCH64, spawn_elf_section_allocator, si, (lvaddr_t) si->module_data, si->module->mrmod_size, &entry_pt);
+    DEBUG_ERR_ON_FAIL(err, "elf load");
     
-    struct Elf64_Shdr *got = elf64_find_section_header_name((genvaddr_t) si->module_data, si->module->mrmod_size, ".got");
+    struct Elf64_Shdr *got = elf64_find_section_header_name((genvaddr_t) si->module_data, si->module->mrmod_size, ".got");  // TODO: check got?
 
     // END ELF PARSING ------------------------------------------------------
 
@@ -192,15 +206,18 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     void *child_args;
 
     err = frame_alloc(&args_cap, ARGS_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "allocating frame for args");
 
     err = paging_map_frame_attr(si->st, &child_args, ARGS_SIZE, args_cap, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for child args");
     err = paging_map_frame_attr(get_current_paging_state(), &parent_args, ARGS_SIZE, args_cap, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent args");
 
     struct spawn_domain_params *args = (struct spawn_domain_params *) parent_args;
 
     memset(parent_args, 0, ARGS_SIZE);
 
-    strcpy(parent_args + sizeof(struct spawn_domain_params), argv[0]);
+    strncpy(parent_args + sizeof(struct spawn_domain_params), argv[0], strlen(argv[0]) + 1);
     args->argv[0] = child_args + sizeof(struct spawn_domain_params);
     args->argc = argc;
     args->argv[argc] = NULL;
@@ -213,18 +230,23 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     struct capref dispatcher;
 
     err = slot_alloc(&dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "allocating slot for dispatcher");
 
     err = dispatcher_create(dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "creating dispatcher");
 
     struct capref parent_dispframe;
 
     err = frame_alloc(&parent_dispframe, DISPATCHER_FRAME_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "allocating frame for parent dispatcher");
 
     void *buf_p;
     err = paging_map_frame_attr(get_current_paging_state(), &buf_p, DISPATCHER_FRAME_SIZE, parent_dispframe, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent dispatcher");
 
     void *buf_c;
     err = paging_map_frame_attr(si->st, &buf_c, DISPATCHER_FRAME_SIZE, parent_dispframe, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for child dispatcher");
 
     // from the book
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic((dispatcher_handle_t)buf_p);
@@ -259,6 +281,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     child_dispframe.cnode = child_task_cnode;
     child_dispframe.slot = TASKCN_SLOT_DISPFRAME;
     err = cap_copy(child_dispframe, parent_dispframe);
+    DEBUG_ERR_ON_FAIL(err, "copying dispatcher frame to child");
 
     // very unnerving that this works even when these are commented out.
 
@@ -273,6 +296,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     // err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
     
     err = invoke_dispatcher(dispatcher, cap_dispatcher, cap_l1_cnode, child_table, child_dispframe, true);
+    DEBUG_ERR_ON_FAIL(err, "invoking dispatcher");
 
     return SYS_ERR_OK;
 }

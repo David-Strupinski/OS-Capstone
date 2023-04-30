@@ -267,6 +267,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // Allocate a space for the dispatcher frame.
     // TODO: use/get rid of the actual dispatcher frame
     //struct capref frame;
+
     err = frame_alloc(&si->taskcn_slot_dispframe, DISPATCHER_FRAME_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "could not allocate frame for dispatcher\n");
 
@@ -282,10 +283,6 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
                                 VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping into the child failed\n");    
 
-    //frame.cnode = si->rootcn_slot_taskcn_cnoderef;
-    si->taskcn_slot_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;
-    si->taskcn_slot_dispframe.slot = TASKCN_SLOT_DISPFRAME;
-
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic((dispatcher_handle_t)buf_p);
     struct dispatcher_generic *disp_gen = get_dispatcher_generic((dispatcher_handle_t)buf_p);
 
@@ -297,7 +294,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     disp->udisp = (lvaddr_t)buf_c;
     disp->disabled = 1;
     strncpy(disp->name, si->binary_name, DISP_NAME_LEN);
-    disabled_area->named.pc = (lvaddr_t)got->sh_addr;// endpoint;
+    disabled_area->named.pc = (lvaddr_t)got->sh_addr;
 
     // TODO: verify arguments of above and below
     armv8_set_registers((dispatcher_handle_t)buf_p, (lvaddr_t) endpoint, (lvaddr_t) got->sh_addr);
@@ -323,8 +320,27 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // err = cap_copy(cap3, si->taskcn_slot_dispatcher);
     debug_print_cap_at_capref(si->rootcn_slot_pagecn_slot0);
     debug_print_cap_at_capref(si->root);
+    debug_print_cap_at_capref(si->taskcn_slot_dispframe);
 
-    err = invoke_dispatcher(si->taskcn_slot_dispatcher, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, si->taskcn_slot_dispframe, true);
+    // struct capref child_root;
+    // child_root.cnode = si->rootcn_slot_taskcn_cnoderef;
+    // child_root.slot = TASKCN_SLOT_ROOTCN;
+    // err = cap_copy(child_root, si->root);
+    // DEBUG_ERR_ON_FAIL(err, "couldn't copy root into child.");
+
+    struct capref child_dispatcher;
+    child_dispatcher.cnode = si->rootcn_slot_taskcn_cnoderef;
+    child_dispatcher.slot = TASKCN_SLOT_DISPATCHER;
+    err = cap_copy(child_dispatcher, si->taskcn_slot_dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "couldn't copy dispatcher into child.");
+
+    struct capref child_dispframe;
+    child_dispframe.cnode = si->rootcn_slot_taskcn_cnoderef;
+    child_dispframe.slot = TASKCN_SLOT_DISPFRAME;
+    err = cap_copy(child_dispframe, si->taskcn_slot_dispframe);
+    DEBUG_ERR_ON_FAIL(err, "couldn't copy dispframe into child.");
+
+    err = invoke_dispatcher(si->taskcn_slot_dispatcher, cap_dispatcher, si->root, si->rootcn_slot_pagecn_slot0, child_dispframe, true);
     DEBUG_ERR_ON_FAIL(err, "invoke dispatcher failed\n");
 
     return SYS_ERR_OK;

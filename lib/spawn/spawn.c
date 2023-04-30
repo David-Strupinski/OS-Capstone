@@ -114,7 +114,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
         .slot = si->module->mrmod_slot,
     };
     err = paging_map_frame_attr(get_current_paging_state(), &si->module_data, si->module->mrmod_size, elf_frame, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR_ON_FAIL(err, "mapping elf frame");
+    DEBUG_ERR_ON_FAIL(err, "mapping elf frame\n");
 
     si->binary_name = (char*)argv[0];
 
@@ -127,22 +127,22 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     struct cnoderef child_task_cnode;
 
     err = cnode_create_l1(&cap_l1_cnode, NULL);
-    DEBUG_ERR_ON_FAIL(err, "creating l1 cnode");
+    DEBUG_ERR_ON_FAIL(err, "creating l1 cnode\n");
     
     struct cnoderef *l2_slot_task_cnode = &child_task_cnode;
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_TASKCN, l2_slot_task_cnode);
-    DEBUG_ERR_ON_FAIL(err, "creating l2 slot task cnode");
+    DEBUG_ERR_ON_FAIL(err, "creating l2 slot task cnode\n");
 
     struct capref cap_l1_slot_cnode;
     cap_l1_slot_cnode.cnode = child_task_cnode,
     cap_l1_slot_cnode.slot = TASKCN_SLOT_ROOTCN,
     
     err = cap_copy(cap_l1_slot_cnode, cap_l1_cnode);
-    DEBUG_ERR_ON_FAIL(err, "copying l1 cnode to child");
+    DEBUG_ERR_ON_FAIL(err, "copying l1 cnode to child\n");
 
     struct cnoderef l2_slot_page_cnode;
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_PAGECN, &l2_slot_page_cnode);
-    DEBUG_ERR_ON_FAIL(err, "creating l2 page cnode");
+    DEBUG_ERR_ON_FAIL(err, "creating l2 page cnode\n");
 
     struct cnoderef l2_slot_basepage_cnode;
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_BASE_PAGE_CN, &l2_slot_basepage_cnode);
@@ -151,14 +151,14 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     // ram for earlymem
     struct capref some_ram;
     err = ram_alloc(&some_ram, BASE_PAGE_SIZE * 256); // TODO CHECK THE SIZE
-    DEBUG_ERR_ON_FAIL(err, "allocating ram for earlymem");
+    DEBUG_ERR_ON_FAIL(err, "allocating ram for earlymem\n");
 
     struct capref child_earlymem = {
         .cnode = child_task_cnode,
         .slot  = TASKCN_SLOT_EARLYMEM
     };
     err = cap_copy(child_earlymem, some_ram);
-    DEBUG_ERR_ON_FAIL(err, "copying ram for earlymem to child");
+    DEBUG_ERR_ON_FAIL(err, "copying ram for earlymem to child\n");
 
     child_table.cnode = l2_slot_page_cnode;
     child_table.slot = 0;
@@ -169,13 +169,13 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     
     struct capref parent_version_of_child_table;
     err = slot_alloc(&parent_version_of_child_table);
-    DEBUG_ERR_ON_FAIL(err, "allocating slot for parent version of child table");
+    DEBUG_ERR_ON_FAIL(err, "allocating slot for parent version of child table\n");
 
     err = vnode_create(child_table, ObjType_VNode_AARCH64_l0);
-    DEBUG_ERR_ON_FAIL(err, "creating vnode for child L0 table");
+    DEBUG_ERR_ON_FAIL(err, "creating vnode for child L0 table\n");
 
     err = cap_copy(parent_version_of_child_table, child_table);
-    DEBUG_ERR_ON_FAIL(err, "copying child L0 table to parent");
+    DEBUG_ERR_ON_FAIL(err, "copying child L0 table to parent\n");
     
     si->st = malloc(sizeof(struct paging_state));
     if (si->st == NULL) {
@@ -184,7 +184,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     }
 
     err = paging_init_state_foreign(si->st, BASE_PAGE_SIZE, parent_version_of_child_table, get_default_slot_allocator());
-    DEBUG_ERR_ON_FAIL(err, "initializing child paging state");
+    DEBUG_ERR_ON_FAIL(err, "initializing child paging state\n");
     
     // END SETUP VSPACE -----------------------------------------------------
 
@@ -193,7 +193,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     genvaddr_t entry_pt;
     
     err = elf_load(EM_AARCH64, spawn_elf_section_allocator, si, (lvaddr_t) si->module_data, si->module->mrmod_size, &entry_pt);
-    DEBUG_ERR_ON_FAIL(err, "elf load");
+    DEBUG_ERR_ON_FAIL(err, "elf load\n");
     
     struct Elf64_Shdr *got = elf64_find_section_header_name((genvaddr_t) si->module_data, si->module->mrmod_size, ".got");  // TODO: check got?
 
@@ -206,12 +206,12 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     void *child_args;
 
     err = frame_alloc(&args_cap, ARGS_SIZE, NULL);
-    DEBUG_ERR_ON_FAIL(err, "allocating frame for args");
+    DEBUG_ERR_ON_FAIL(err, "allocating frame for args\n");
 
     err = paging_map_frame_attr(si->st, &child_args, ARGS_SIZE, args_cap, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR_ON_FAIL(err, "mapping frame for child args");
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for child args\n");
     err = paging_map_frame_attr(get_current_paging_state(), &parent_args, ARGS_SIZE, args_cap, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent args");
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent args\n");
 
     struct spawn_domain_params *args = (struct spawn_domain_params *) parent_args;
 
@@ -230,23 +230,23 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     struct capref dispatcher;
 
     err = slot_alloc(&dispatcher);
-    DEBUG_ERR_ON_FAIL(err, "allocating slot for dispatcher");
+    DEBUG_ERR_ON_FAIL(err, "allocating slot for dispatcher\n");
 
     err = dispatcher_create(dispatcher);
-    DEBUG_ERR_ON_FAIL(err, "creating dispatcher");
+    DEBUG_ERR_ON_FAIL(err, "creating dispatcher\n");
 
     struct capref parent_dispframe;
 
     err = frame_alloc(&parent_dispframe, DISPATCHER_FRAME_SIZE, NULL);
-    DEBUG_ERR_ON_FAIL(err, "allocating frame for parent dispatcher");
+    DEBUG_ERR_ON_FAIL(err, "allocating frame for parent dispatcher\n");
 
     void *buf_p;
     err = paging_map_frame_attr(get_current_paging_state(), &buf_p, DISPATCHER_FRAME_SIZE, parent_dispframe, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent dispatcher");
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent dispatcher\n");
 
     void *buf_c;
     err = paging_map_frame_attr(si->st, &buf_c, DISPATCHER_FRAME_SIZE, parent_dispframe, VREGION_FLAGS_READ_WRITE);
-    DEBUG_ERR_ON_FAIL(err, "mapping frame for child dispatcher");
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for child dispatcher\n");
 
     // from the book
     struct dispatcher_shared_generic *disp = get_dispatcher_shared_generic((dispatcher_handle_t)buf_p);
@@ -281,7 +281,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     child_dispframe.cnode = child_task_cnode;
     child_dispframe.slot = TASKCN_SLOT_DISPFRAME;
     err = cap_copy(child_dispframe, parent_dispframe);
-    DEBUG_ERR_ON_FAIL(err, "copying dispatcher frame to child");
+    DEBUG_ERR_ON_FAIL(err, "copying dispatcher frame to child\n");
 
     // very unnerving that this works even when these are commented out.
 
@@ -296,7 +296,7 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     // err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
     
     err = invoke_dispatcher(dispatcher, cap_dispatcher, cap_l1_cnode, child_table, child_dispframe, true);
-    DEBUG_ERR_ON_FAIL(err, "invoking dispatcher");
+    DEBUG_ERR_ON_FAIL(err, "invoking dispatcher\n");
 
     return SYS_ERR_OK;
 }
@@ -363,23 +363,14 @@ errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size,
 
     struct capref frame;
     err = frame_alloc(&frame, size, NULL);
+    DEBUG_ERR_ON_FAIL(err, "allocating frame for elf section\n");
 
     void *retval;
-    err = paging_map_frame_attr(
-        get_current_paging_state(),
-        &retval,
-        size,
-        frame,
-        VREGION_FLAGS_READ_WRITE
-    );
-    
-    err = paging_map_fixed_attr(
-        si->st,
-        base,
-        frame,
-        size,
-        flags
-    );
+    err = paging_map_frame_attr(get_current_paging_state(), &retval, size, frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for parent elf section\n");
+
+    err = paging_map_fixed_attr(si->st, base, frame, size, flags);
+    DEBUG_ERR_ON_FAIL(err, "mapping frame for child elf section\n");
 
     *ret = retval + (init_base - base);
 

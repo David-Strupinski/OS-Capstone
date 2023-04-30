@@ -74,6 +74,13 @@ __attribute__((__used__)) static void armv8_set_registers(dispatcher_handle_t ha
 errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, const char *name,
                                   domainid_t pid)
 {
+    // TODO: updated and accurate!
+    //   - get default args
+    //   - put them in an arguments array
+    //   - get the multiboot image (spawn_load_with_caps expects it)
+    //   - call spawn_load_with_caps
+    
+    
     //errval_t err;
 
     // Get the module from the multiboot image, create a capability to it

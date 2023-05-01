@@ -81,6 +81,30 @@ __attribute__((__used__)) static void spawn_info_to_proc_status(struct spawninfo
  * ------------------------------------------------------------------------------------------------
  */
 
+static errval_t parse_args(const char *cmdline, int *argc, char *argv[])
+{
+    // check if we have at least one argument
+    if (argv == NULL || argv[0] == NULL || argc == NULL || cmdline == NULL) {
+        return CAPS_ERR_INVALID_ARGS;
+    }
+
+    // parse cmdline, split on spaces
+    char cmdline_ptr[MAX_CMDLINE_ARGS + 1];
+    strncpy(cmdline_ptr, cmdline, strlen(cmdline) + 1);
+    char *token = strtok(cmdline_ptr, " ");
+    int i = 0;
+    *argc = 0;
+
+    while (token != NULL && i < MAX_CMDLINE_ARGS) {
+        argv[i++] = token;
+        (*argc)++;
+        token = strtok(NULL, " ");
+        // printf("%s\n", argv[i-1]);
+    }
+    argv[i] = NULL;
+
+    return SYS_ERR_OK;
+}
 
 /**
  * @brief spawns a new process with the given arguments and capabilities on the given core.
@@ -161,9 +185,11 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     // HINT: you may call proc_mgmt_spawn_with_caps with some preparation
     // Note: With multicore support, you many need to send a message to the other core
     
-    // TODO: parse command line properly
-    const char* argv[1];
+    // parse command line properly
+    const char *argv[MAX_CMDLINE_ARGS];
     argv[0] = cmdline;
+    int argc = 0;
+    parse_args(cmdline, &argc, (char **)argv);
     proc_mgmt_spawn_with_caps(1, argv, 0, NULL, core, pid);
     return SYS_ERR_OK;
 }

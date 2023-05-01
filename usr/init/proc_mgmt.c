@@ -133,7 +133,9 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     (void)pid;
     struct spawninfo si;
     struct elfimg ei;
-    
+    // TODO: updated and accurate!
+    // - allocate an available PID
+
     struct mem_region* module = multiboot_find_module(bi, argv[0]);
     if (module == NULL) {
         printf("multiboot_find_module failed to find %s\n", argv[0]);
@@ -147,11 +149,9 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
     
     // TODO:
-    //  - find the image
-    //  - allocate a PID
-    //  - use the spawn library to construct a new process
-    //  - start the new process
     //  - keep track of the spawned process
+    //  - optional - if we want to stop and restart processes (or kill at all) keep track of 
+    //    allocated cnodes so we can deallocate later
     //
     // Note: With multicore support, you many need to send a message to the other core
     return SYS_ERR_OK;
@@ -176,12 +176,9 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     (void)core;
     (void)pid;
 
-    // TODO:
-    //  - find the image
-    //  - allocate a PID
-    //  - use the spawn library to construct a new process
-    //  - start the new process
-    //  - keep track of the spawned process
+    // TODO: updated and accurate!
+    //   - parse command line and pass arguments down.
+    // 
     // HINT: you may call proc_mgmt_spawn_with_caps with some preparation
     // Note: With multicore support, you many need to send a message to the other core
     
@@ -215,12 +212,8 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
     (void)pid;
     
     // TODO:
-    //  - find the image
-    //  - allocate a PID
-    //  - use the spawn library to construct a new process
-    //  - start the new process
-    //  - keep track of the spawned process
-    //
+    //  - not sure if we need to do anything about args or not
+    //  - call straight down into proc_mgmt_spawn_with_boot_info
     // Note: With multicore support, you many need to send a message to the other core
     return SYS_ERR_OK;
 }

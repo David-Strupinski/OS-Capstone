@@ -224,8 +224,12 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
 
     memset(parent_args, 0, ARGS_SIZE);
 
-    strncpy(parent_args + sizeof(struct spawn_domain_params), argv[0], strlen(argv[0]) + 1);
-    args->argv[0] = child_args + sizeof(struct spawn_domain_params);
+    int offset = 0;
+    for (int i = 0; i < argc; i++) {
+        strncpy(parent_args + sizeof(struct spawn_domain_params) + offset, argv[i], strlen(argv[i]) + 1);
+        args->argv[i] = child_args + sizeof(struct spawn_domain_params) + offset;
+        offset = offset + strlen(argv[i]) + 1;
+    }
     args->argc = argc;
     args->argv[argc] = NULL;
 

@@ -99,7 +99,6 @@ static errval_t parse_args(const char *cmdline, int *argc, char *argv[])
         argv[i++] = token;
         (*argc)++;
         token = strtok(NULL, " ");
-        // printf("%s\n", argv[i-1]);
     }
     argv[i] = NULL;
 
@@ -187,7 +186,7 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     argv[0] = cmdline;
     int argc = 0;
     parse_args(cmdline, &argc, (char **)argv);
-    proc_mgmt_spawn_with_caps(1, argv, 0, NULL, core, pid);
+    proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, core, pid);
     return SYS_ERR_OK;
 }
 

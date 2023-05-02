@@ -421,10 +421,18 @@ errval_t proc_mgmt_get_name(domainid_t pid, char *name, size_t len)
     (void)name;
     (void)len;
 
-    USER_PANIC("functionality not implemented\n");
     // TODO:
     //   - get the name of the process with the given PID
-    return LIB_ERR_NOT_IMPLEMENTED;
+    struct spawninfo * curr = root;
+    while (curr != NULL) {
+        if (curr->pid == pid) {
+            // found our process
+            strcpy(name, curr->binary_name);
+            len = strlen(binary_name);
+        }
+        curr = curr->next;
+    }
+    return SPAWN_ERR_DOMAIN_NOTFOUND;
 }
 
 

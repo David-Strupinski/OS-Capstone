@@ -280,7 +280,7 @@ errval_t proc_mgmt_ps(struct proc_status **ps, size_t *num)
  * @brief obtains the list of running processes from the process manager
  *
  * @param[out] pids  array of process ids in the system (must be freed by the caller)
- * @param[out] num   the number of processes in teh list
+ * @param[out] num   the number of processes in the list
  *
  * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
  *
@@ -292,10 +292,30 @@ errval_t proc_mgmt_get_proc_list(domainid_t **pids, size_t *num)
     (void)pids;
     (void)num;
 
-    USER_PANIC("functionality not implemented\n");
     // TODO:
     //  - consult the process table to obtain a list of PIDs of the processes in the system
-    return LIB_ERR_NOT_IMPLEMENTED;
+    struct spawninfo *curr = root;
+    while (curr != NULL) {
+        if (curr->state == SPAWN_STATE_RUNNING) {
+            (*num)++;
+        }
+        curr = curr->next;
+    }
+    *pids = (domainid_t *) malloc(sizeof(domainid_t *) * (*num));
+    printf("mallocing %d\n", *num);
+
+    curr = root;
+    int i = 0;
+    while (curr != NULL) {
+        printf("hi %d\n", i);
+        if (curr->state == SPAWN_STATE_RUNNING) {
+            (*pids)[i] = curr->pid;
+            i++;
+        }
+        curr = curr->next;
+    }
+
+    return SYS_ERR_OK;
 }
 
 

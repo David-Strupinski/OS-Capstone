@@ -205,6 +205,29 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_BASE_PAGE_CN, &l2_slot_basepage_cnode);
     DEBUG_ERR_ON_FAIL(err, "creating l2 base page cnode");
     
+    struct cnoderef l2_slot_alloc0_cnode;
+    err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_SLOT_ALLOC0, &l2_slot_alloc0_cnode);
+    DEBUG_ERR_ON_FAIL(err, "creating l2 slot alloc 0 cnode\n");
+
+    struct cnoderef l2_slot_alloc1_cnode;
+    err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_SLOT_ALLOC1, &l2_slot_alloc1_cnode);
+    DEBUG_ERR_ON_FAIL(err, "creating l2 slot alloc 1 cnode\n");
+
+    struct cnoderef l2_slot_alloc2_cnode;
+    err = cnode_create_foreign_l2(cap_l1_cnode, ROOTCN_SLOT_SLOT_ALLOC2, &l2_slot_alloc2_cnode);
+    DEBUG_ERR_ON_FAIL(err, "creating l2 slot alloc 2 cnode\n");
+
+    // copy all capabilities that were passed in to child's slot_alloc0 l2 cnode
+    // we are assuming that the cnode can hold everything that is passed in, and that they
+    // won't be overwritten by the child's slot allocator
+    struct capref temp;
+    temp.cnode = l2_slot_alloc0_cnode;
+    for (int i = 0; i < capc; i++) {
+        temp.slot = (cslot_t) i;
+        err = cap_copy(temp, caps[i]);
+        DEBUG_ERR_ON_FAIL(err, "failed to copy cap from parent to child\n");
+    }
+    
     // ram for earlymem
     struct capref some_ram;
     err = ram_alloc(&some_ram, BASE_PAGE_SIZE * 256); // TODO CHECK THE SIZE
@@ -344,17 +367,20 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cap_copy(child_dispframe, parent_dispframe);
     DEBUG_ERR_ON_FAIL(err, "copying dispatcher frame to child\n");
 
-    // very unnerving that this works even when these are commented out.
+    // create other random capabilities
 
-    // struct capref child_disp;
-    // child_disp.cnode = child_task_cnode,
-    // child_disp.slot = TASKCN_SLOT_DISPATCHER,
-    // err = cap_copy(child_disp, dispatcher);
-    
-    // struct capref selfep;
-    // selfep.cnode = child_task_cnode,
-    // selfep.slot = TASKCN_SLOT_SELFEP,
-    // err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
+    struct capref child_disp;
+    child_disp.cnode = child_task_cnode,
+    child_disp.slot = TASKCN_SLOT_DISPATCHER,
+    err = cap_copy(child_disp, dispatcher);
+    DEBUG_ERR_ON_FAIL(err, "copying dispatcher cap to child\n");
+
+    struct capref selfep;
+    selfep.cnode = child_task_cnode,
+    selfep.slot = TASKCN_SLOT_SELFEP,
+    err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
+    DEBUG_ERR_ON_FAIL(err, "copying self referencing cap to child\n");
+
     si->state           = SPAWN_STATE_READY;
     si->dispatcher      = dispatcher;
     si->cap_l1_cnode    = cap_l1_cnode;

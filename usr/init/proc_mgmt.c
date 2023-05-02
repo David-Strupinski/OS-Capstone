@@ -30,8 +30,8 @@
 extern struct bootinfo *bi;
 extern coreid_t         my_core_id;
 
-
-
+// TODO: make this work with multiple cores.
+struct spawninfo* root = NULL;
 
 
 /*
@@ -130,10 +130,16 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     (void)capv;
     (void)core;
     (void)pid;
-    struct spawninfo si;
+    struct spawninfo * si = (struct spawninfo *) malloc(sizeof(struct spawninfo));
     struct elfimg ei;
-    // TODO: updated and accurate!
-    // - allocate an available PID
+
+    si->next = root;
+    if (si->next == NULL) {
+        si->pid = 1;
+    } else {
+        si->pid = si->next->pid + 1;
+    }
+    root = si;
 
     struct mem_region* module = multiboot_find_module(bi, argv[0]);
     if (module == NULL) {
@@ -142,13 +148,13 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     }
     
     // added line bellow
-    si.module = module;
+    si->module = module;
 
     elfimg_init_from_module(&ei, module);
-    spawn_load_with_caps(&si, &ei, argc, argv, capc, capv, 23);
-    
+    spawn_load_with_caps(si, &ei, argc, argv, capc, capv, si->pid);
+    spawn_start(si);
+    *pid = si->pid;
     // TODO:
-    //  - keep track of the spawned process
     //  - optional - if we want to stop and restart processes (or kill at all) keep track of 
     //    allocated cnodes so we can deallocate later
     //
@@ -212,8 +218,21 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
     
     // TODO:
     //  - not sure if we need to do anything about args or not
-    //  - call straight down into proc_mgmt_spawn_with_boot_info
+    //  - call straight down into spawn_with_boot_info
     // Note: With multicore support, you many need to send a message to the other core
+
+    struct spawninfo * si = (struct spawninfo *) malloc(sizeof(struct spawninfo));
+
+    si->next = root;
+    if (si->next == NULL) {
+        si->pid = 1;
+    } else {
+        si->pid = si->next->pid + 1;
+    }
+    root = si;
+    
+    spawn_load_with_bootinfo(si, bi, path, si->pid);
+    spawn_start(si);
     return SYS_ERR_OK;
 }
 
@@ -242,10 +261,18 @@ errval_t proc_mgmt_ps(struct proc_status **ps, size_t *num)
     (void)ps;
     (void)num;
 
-    USER_PANIC("functionality not implemented\n");
-    // TODO:
-    //  - consult the process table to obtain the status of the processes
-    return LIB_ERR_NOT_IMPLEMENTED;
+
+    // TODO: this is not done
+    struct spawninfo* curr = root;
+    int i = 0;
+    while (curr != NULL) {
+        ps[i] = (struct proc_status *) malloc(sizeof(struct proc_status));
+        ps[i]->core = disp_get_core_id();
+        ps[i]->state = PROC_STATE_RUNNING;
+        curr = curr->next;
+        i++;
+    }
+    return SYS_ERR_OK;
 }
 
 

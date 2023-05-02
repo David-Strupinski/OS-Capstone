@@ -161,8 +161,8 @@ errval_t grading_run_tests_processes(void)
     grading_printf("# TESTS: Milestone 3 (Process Management)        \n");
     grading_printf("#################################################\n");
 
-    if (false) spawn_one_without_args();
-    if (false) spawn_one_with_default_args();
+    if (true) spawn_one_without_args();
+    if (true) spawn_one_with_default_args();
     spawn_one_with_args();
     if (false) spawn_list();
 

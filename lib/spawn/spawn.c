@@ -58,6 +58,37 @@ __attribute__((__used__)) static void armv8_set_registers(dispatcher_handle_t ha
 
 
 
+
+static errval_t parse_args(const char *cmdline, int *argc, char *argv[])
+{
+    // check if we have at least one argument
+    if (argv == NULL || argv[0] == NULL || argc == NULL || cmdline == NULL) {
+        return CAPS_ERR_INVALID_ARGS;
+    }
+
+    // parse cmdline, split on spaces
+    char cmdline_ptr[MAX_CMDLINE_ARGS + 1];
+    strncpy(cmdline_ptr, cmdline, strlen(cmdline) + 1);
+    char *token = strtok(cmdline_ptr, " ");
+    int i = 0;
+    *argc = 0;
+
+    while (token != NULL && i < MAX_CMDLINE_ARGS) {
+        argv[i++] = token;
+        (*argc)++;
+        token = strtok(NULL, " ");
+    }
+    argv[i] = NULL;
+
+    return SYS_ERR_OK;
+}
+
+
+
+
+
+
+
 /**
  * @brief constructs a new process by loading the image from the bootinfo struct
  *
@@ -81,39 +112,56 @@ errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, con
     //   - call spawn_load_with_caps
     
     
-    //errval_t err;
+    errval_t err = SYS_ERR_OK;
 
-    // Get the module from the multiboot image, create a capability to it
-    //struct mem_region* module = multiboot_find_module(bi, name);
-    (void) si;
-    (void) bi;
-    (void) name;
-    (void) pid;
-
-    // char* strings = multiboot_module_opts(module);
+    struct mem_region* module = multiboot_find_module(bi, name);
     
-    // printf("This is what multiboot_module_opts returns: %s\n", strings);
-    // // - Fill in argc/argv from the multiboot command line
-    // // - Call spawn_load_with_args
-    // struct elfimg *img;
-    // spawn_load_with_args(si, img, int argc, const char *argv[], pid);
-    return -1;
+    char* strings = (char *)multiboot_module_opts(module);
+    
+    struct elfimg img;
+    elfimg_init_from_module(&img, module);
+    const char *argv[MAX_CMDLINE_ARGS];
+    argv[0] = strings;
+    int argc = 0;
+    parse_args(strings, &argc, (char **)argv);
+    si->module = module;
+    err = spawn_load_with_args(si, &img, argc, argv, pid);
+    return err;
 }
 
-errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
-                     const char *argv[], int capc, struct capref caps[], domainid_t pid);
-errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
-                     const char *argv[], int capc, struct capref caps[], domainid_t pid) {
-    (void) si;
-    (void) img;
-    (void) argc;
-    (void) argv;
-    (void) capc;
-    (void) caps;
-    (void) pid;
+
+/**
+ * @brief constructs a new process from the provided image pointer
+ *
+ * @param[in] si    spawninfo structure to fill in
+ * @param[in] img   pointer to the elf image in memory
+ * @param[in] argc  number of arguments in argv
+ * @param[in] argv  command line arguments
+ * @param[in] capc  number of capabilities in the caps array
+ * @param[in] caps  array of capabilities to pass to the child
+ * @param[in] pid   the process id (PID) for the new process
+ *
+ * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
+ *
+ * Note, this function prepares a new process for running, but it does not make it
+ * runnable. See spawn_start().
+ */
+errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc,
+                              const char *argv[], int capc, struct capref caps[], domainid_t pid)
+{
+    // make compiler happy about unused parameters
+    (void)si;
+    (void)img;
+    (void)argc;
+    (void)argv;
+    (void)capc;
+    (void)caps;
+    (void)pid;
+
+    
 
     errval_t err;
-
+    printf("in the function\n");
     // TODO: error checking everywhere, I did absolutely no error checking
 
     struct capref elf_frame = {
@@ -122,6 +170,8 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     };
     err = paging_map_frame_attr(get_current_paging_state(), &si->module_data, si->module->mrmod_size, elf_frame, VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping elf frame\n");
+
+    //printf("%.4s\n", si->module_data);
 
     si->binary_name = (char*)argv[0];
 
@@ -305,44 +355,13 @@ errval_t fresh_start(struct spawninfo *si, struct elfimg *img, int argc,
     // selfep.cnode = child_task_cnode,
     // selfep.slot = TASKCN_SLOT_SELFEP,
     // err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
-    
-    err = invoke_dispatcher(dispatcher, cap_dispatcher, cap_l1_cnode, child_table, child_dispframe, true);
-    DEBUG_ERR_ON_FAIL(err, "invoking dispatcher\n");
+    si->state           = SPAWN_STATE_READY;
+    si->dispatcher      = dispatcher;
+    si->cap_l1_cnode    = cap_l1_cnode;
+    si->child_table     = child_table;
+    si->child_dispframe = child_dispframe;
 
     return SYS_ERR_OK;
-}
-
-
-
-/**
- * @brief constructs a new process from the provided image pointer
- *
- * @param[in] si    spawninfo structure to fill in
- * @param[in] img   pointer to the elf image in memory
- * @param[in] argc  number of arguments in argv
- * @param[in] argv  command line arguments
- * @param[in] capc  number of capabilities in the caps array
- * @param[in] caps  array of capabilities to pass to the child
- * @param[in] pid   the process id (PID) for the new process
- *
- * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
- *
- * Note, this function prepares a new process for running, but it does not make it
- * runnable. See spawn_start().
- */
-errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc,
-                              const char *argv[], int capc, struct capref caps[], domainid_t pid)
-{
-    // make compiler happy about unused parameters
-    (void)si;
-    (void)img;
-    (void)argc;
-    (void)argv;
-    (void)capc;
-    (void)caps;
-    (void)pid;
-
-    return fresh_start(si, img, argc, argv, capc, caps, pid);
 }
 
 /**
@@ -397,14 +416,16 @@ errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size,
  */
 errval_t spawn_start(struct spawninfo *si)
 {
-    // make compiler happy about unused parameters
-    (void)si;
+    errval_t err;
 
-    // TODO:
-    //  - check whether the process is in the right state (ready to be started)
-    //  - invoke the dispatcher to make the process runnable
-    //  - set the state to running
-    //USER_PANIC("Not implemented");
+    if (si->state != SPAWN_STATE_READY) {
+        return SYS_ERR_DISP_NOT_RUNNABLE;
+    }
+
+    err = invoke_dispatcher(si->dispatcher, cap_dispatcher, si->cap_l1_cnode, si->child_table, si->child_dispframe, true);
+    DEBUG_ERR_ON_FAIL(err, "invoking dispatcher\n");
+    si->state = SPAWN_STATE_RUNNING;
+
     return SYS_ERR_OK;
 }
 

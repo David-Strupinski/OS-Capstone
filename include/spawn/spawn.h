@@ -73,8 +73,17 @@ struct spawninfo {
     //           e.g. references to the child's
     //           capabilities or paging state
 
+    // the next spawninfo struct
+    struct spawninfo *next;
+
     // Child's paging state
     struct paging_state *st;
+
+    // caprefs required for invoke dispatcher
+    struct capref dispatcher;
+    struct capref cap_l1_cnode;
+    struct capref child_table;
+    struct capref child_dispframe;
 
     // elfimg data
     struct mem_region *module;

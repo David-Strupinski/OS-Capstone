@@ -428,7 +428,7 @@ errval_t proc_mgmt_get_name(domainid_t pid, char *name, size_t len)
         if (curr->pid == pid) {
             // found our process
             strcpy(name, curr->binary_name);
-            len = strlen(binary_name);
+            len = strlen(curr->binary_name);
         }
         curr = curr->next;
     }

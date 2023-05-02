@@ -174,6 +174,22 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     //printf("%.4s\n", si->module_data);
 
     si->binary_name = (char*)argv[0];
+    
+    // reconstruct si->cmdline from argv with spaces
+    int cmdline_len = 0;
+    for (int i = 0; i < argc; i++) {
+        cmdline_len += strlen(argv[i]) + 1;
+    }
+
+    int pos = 0;
+    for (int i = 0; i < argc; i++) {
+        strcpy(si->cmdline + pos, argv[i]);
+        pos += strlen(argv[i]);
+        si->cmdline[pos++] = ' ';
+    }
+    si->cmdline[cmdline_len - 1] = '\0';
+
+    si->core_id = disp_get_core_id();
 
     // SETUP CSPACE ---------------------------------------------------------
     // TODO: for some reason this works even when not all the cnodes 

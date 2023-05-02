@@ -56,6 +56,8 @@ struct spawninfo {
     /// name of the binary this process runs
     char *binary_name;
 
+    int core_id;
+
     /// the full commandline of this process, including its arguments
     char cmdline[MAX_CMDLINE_ARGS];
 

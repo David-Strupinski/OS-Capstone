@@ -181,10 +181,6 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     (void)core;
     (void)pid;
 
-    // TODO: updated and accurate!
-    //   - parse command line and pass arguments down.
-    // 
-    // HINT: you may call proc_mgmt_spawn_with_caps with some preparation
     // Note: With multicore support, you many need to send a message to the other core
     
     // parse command line properly
@@ -216,9 +212,6 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
     (void)core;
     (void)pid;
     
-    // TODO:
-    //  - not sure if we need to do anything about args or not
-    //  - call straight down into spawn_with_boot_info
     // Note: With multicore support, you many need to send a message to the other core
 
     struct spawninfo * si = (struct spawninfo *) malloc(sizeof(struct spawninfo));
@@ -263,15 +256,29 @@ errval_t proc_mgmt_ps(struct proc_status **ps, size_t *num)
 
 
     // TODO: this is not done
-    struct spawninfo* curr = root;
+    struct spawninfo *curr = root;
+    while (curr != NULL) {
+        if (curr->state == SPAWN_STATE_RUNNING) {
+            (*num)++;
+        }
+        curr = curr->next;
+    }
+    *ps = (struct proc_status *) malloc(sizeof(struct proc_status) * (*num));
+
+    curr = root;
     int i = 0;
     while (curr != NULL) {
-        ps[i] = (struct proc_status *) malloc(sizeof(struct proc_status));
-        ps[i]->core = disp_get_core_id();
-        ps[i]->state = PROC_STATE_RUNNING;
+        if (curr->state == SPAWN_STATE_RUNNING) {
+            ps[i]->pid = curr->pid;
+            ps[i]->core = curr->core_id;
+            ps[i]->state = PROC_STATE_RUNNING;
+            ps[i]->exit_code = curr->exitcode;
+            strncpy(ps[i]->cmdline, curr->cmdline, MAX_CMDLINE_ARGS);
+            i++;
+        }
         curr = curr->next;
-        i++;
     }
+
     return SYS_ERR_OK;
 }
 
@@ -301,7 +308,7 @@ errval_t proc_mgmt_get_proc_list(domainid_t **pids, size_t *num)
         }
         curr = curr->next;
     }
-    *pids = (domainid_t *) malloc(sizeof(domainid_t *) * (*num));
+    *pids = (domainid_t *) malloc(sizeof(domainid_t *) * (*num));  // TODO: memory leak? should malloc non-pointer??
 
     curr = root;
     int i = 0;
@@ -381,7 +388,7 @@ errval_t proc_mgmt_get_status(domainid_t pid, struct proc_status *status)
     struct spawninfo *curr = root;
     while (curr != NULL) {
         if (curr->pid == pid) {
-            status->core = disp_get_core_id();
+            status->core = curr->core_id;
             status->state = get_proc_state_from_spawn_state(curr->state);
             status->pid = pid;
             status->exit_code = curr->exitcode;

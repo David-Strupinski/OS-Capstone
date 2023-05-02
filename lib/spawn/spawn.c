@@ -161,7 +161,6 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     
 
     errval_t err;
-    printf("in the function\n");
     // TODO: error checking everywhere, I did absolutely no error checking
 
     struct capref elf_frame = {

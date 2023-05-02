@@ -145,6 +145,44 @@ static void spawn_list(void)
     grading_test_pass("P1-4", "passed spawn_list\n");
 }
 
+static void spawn_one_with_capabilities(void)
+{
+    errval_t err;
+
+    // the core we want to spawn on, our own.
+    coreid_t core = disp_get_core_id();
+
+    grading_printf("spawn_one_with_capabilities(%s)\n", BINARY_NAME);
+
+    // create a frame to pass to child
+    struct capref frame[1];
+    err = frame_alloc(&frame[0], BASE_PAGE_SIZE, NULL);
+    if (err_is_fail(err)) {
+        grading_test_fail("P1-3", "failed to allocate slot for frame");
+        return;
+    }
+    void *buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame[0], VREGION_FLAGS_READ_WRITE);
+    if (err_is_fail(err)) {
+        grading_test_fail("P1-3", "failed to map frame");
+        return;
+    }
+    strcpy(buf, "Capability passing is working!");
+
+    domainid_t pid;
+    const char *argv[1] = {BINARY_NAME};
+    err = proc_mgmt_spawn_with_caps(1, argv, 1, frame, core, &pid);
+    if (err_is_fail(err)) {
+        grading_test_fail("P1-3", "failed to load: %s\n", err_getstring(err));
+        return;
+    }
+
+    // Heads up! When you have messaging support, then you may need to handle a
+    // few messages here for the process to start up
+    grading_printf("waiting 2 seconds to give the other domain chance to run...\n");
+    barrelfish_usleep(2000000);
+}
+
 errval_t grading_run_tests_processes(void)
 {
     if (grading_options.m3_subtest_run == 0) {
@@ -161,10 +199,11 @@ errval_t grading_run_tests_processes(void)
     grading_printf("# TESTS: Milestone 3 (Process Management)        \n");
     grading_printf("#################################################\n");
 
-    if (true) spawn_one_without_args();
-    if (true) spawn_one_with_default_args();
+    spawn_one_without_args();
+    spawn_one_with_default_args();
     spawn_one_with_args();
-    if (false) spawn_list();
+    spawn_list();
+    spawn_one_with_capabilities();
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 3 (Process Management)        \n");

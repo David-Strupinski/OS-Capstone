@@ -302,12 +302,10 @@ errval_t proc_mgmt_get_proc_list(domainid_t **pids, size_t *num)
         curr = curr->next;
     }
     *pids = (domainid_t *) malloc(sizeof(domainid_t *) * (*num));
-    printf("mallocing %d\n", *num);
 
     curr = root;
     int i = 0;
     while (curr != NULL) {
-        printf("hi %d\n", i);
         if (curr->state == SPAWN_STATE_RUNNING) {
             (*pids)[i] = curr->pid;
             i++;
@@ -343,6 +341,27 @@ errval_t proc_mgmt_get_pid_by_name(const char *name, domainid_t *pid)
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 
+static proc_state_t get_proc_state_from_spawn_state(spawn_state_t state)
+{
+    switch (state) {
+        case SPAWN_STATE_RUNNING:
+            return PROC_STATE_RUNNING;
+        case SPAWN_STATE_UNKNOWN:
+            return PROC_STATE_UNKNOWN;
+        case SPAWN_STATE_SPAWNING:
+            return PROC_STATE_SPAWNING;
+        case SPAWN_STATE_SUSPENDED:
+            return PROC_STATE_PAUSED;
+        case SPAWN_STATE_KILLED:
+            return PROC_STATE_KILLED;
+        default:
+            USER_PANIC("invalid spawn state\n");
+            return -1;
+    }
+    USER_PANIC("invalid spawn state\n");
+    return -1;
+}
+
 /**
  * @brief obtains the status of a process with the given PID
  *
@@ -357,10 +376,25 @@ errval_t proc_mgmt_get_status(domainid_t pid, struct proc_status *status)
     (void)pid;
     (void)status;
 
-    USER_PANIC("functionality not implemented\n");
     // TODO:
     //   - get the status of the process with the given PID
-    return LIB_ERR_NOT_IMPLEMENTED;
+    struct spawninfo *curr = root;
+    while (curr != NULL) {
+        if (curr->pid == pid) {
+            status->core = disp_get_core_id();
+            status->state = get_proc_state_from_spawn_state(curr->state);
+            status->pid = pid;
+            status->exit_code = curr->exitcode;
+
+            strncpy(status->cmdline, curr->cmdline, MAX_CMDLINE_ARGS);
+
+            return SYS_ERR_OK;
+        }
+        curr = curr->next;
+    }
+    printf("done\n");
+
+    return SPAWN_ERR_WRONG_STATE;
 }
 
 

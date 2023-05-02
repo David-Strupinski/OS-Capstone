@@ -57,7 +57,7 @@ struct spawninfo {
     char *binary_name;
 
     /// the full commandline of this process, including its arguments
-    char *cmdline;
+    char cmdline[MAX_CMDLINE_ARGS];
 
     /// PID of this process
     domainid_t pid;

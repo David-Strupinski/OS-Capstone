@@ -396,6 +396,28 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
     DEBUG_ERR_ON_FAIL(err, "copying self referencing cap to child\n");
 
+    // TODO: check if this is right, book says we should receive this from the child
+
+    struct capref endpoint;
+    struct lmp_endpoint *ep;
+    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
+    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint\n");
+
+    struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
+    if (chan == NULL) {
+        debug_printf("malloc failed\n");
+        return LIB_ERR_MALLOC_FAIL;
+    }
+
+    lmp_chan_init(chan);
+    chan->local_cap = endpoint;
+    chan->remote_cap = selfep;  // TODO: check if this is right, book says we should receive this from the child
+    chan->endpoint = ep;
+    err = lmp_chan_alloc_recv_slot(chan);
+    DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
+
+    // --------------------- end TODO ---------------------------------------
+
     si->state           = SPAWN_STATE_READY;
     si->dispatcher      = dispatcher;
     si->cap_l1_cnode    = cap_l1_cnode;

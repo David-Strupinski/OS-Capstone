@@ -15,6 +15,10 @@
 #ifndef BARRELFISH_DISPATCHER_H
 #define BARRELFISH_DISPATCHER_H
 
+#ifndef CONFIG_INTERCONNECT_DRIVER_LMP
+#define CONFIG_INTERCONNECT_DRIVER_LMP
+#endif
+
 #include <aos/dispatch.h>
 #include <aos/core_state_arch.h>
 #include <aos/heap.h>

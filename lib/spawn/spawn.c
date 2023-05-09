@@ -22,9 +22,10 @@
 #include <spawn/argv.h>
 #include <spawn/elfimg.h>
 
-// Helper funciton declarations
+// Helper function declarations
 errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
                                      uint32_t flags, void **ret);
+static void get_remote_cap(void* arg);
 
 
 /**
@@ -396,29 +397,14 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
     DEBUG_ERR_ON_FAIL(err, "copying self referencing cap to child\n");
 
-    struct capref endpoint;
-    struct lmp_endpoint *ep;
-    err = endpoint_create(LMP_RECV_LENGTH, &endpoint, &ep);
-    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint\n");
-
-    struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
-    if (chan == NULL) {
-        debug_printf("malloc failed\n");
-        return LIB_ERR_MALLOC_FAIL;
-    }
-
-    lmp_chan_init(chan);
-    chan->local_cap = endpoint;
-    // chan->remote_cap = selfep;  // TODO: check if this is right, book says we should receive this from the child
-    chan->endpoint = ep;
-    err = lmp_chan_alloc_recv_slot(chan);
-    DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
-
     si->state           = SPAWN_STATE_READY;
     si->dispatcher      = dispatcher;
     si->cap_l1_cnode    = cap_l1_cnode;
     si->child_table     = child_table;
     si->child_dispframe = child_dispframe;
+
+    err = spawn_setup_ipc(si, get_default_waitset(), NULL);
+    DEBUG_ERR_ON_FAIL(err, "ipc setup failed\n");
 
     return SYS_ERR_OK;
 }
@@ -622,14 +608,40 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     (void)si;
     (void)ws;
     (void)handler;
+    errval_t err;
 
-    // TODO:
-    //  - initialize the messaging channels for the process
-    //  - check its execution state (it shouldn't have run yet)
-    //  - create the required capabilities if needed
-    //  - set the receive handler
-    USER_PANIC("Not implemented");
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // create the required capabilities if needed
+
+    struct capref endpoint;
+    struct lmp_endpoint *ep;
+    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
+    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
+
+    struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
+    if (chan == NULL) {
+        debug_printf("malloc failed\n");
+        return LIB_ERR_MALLOC_FAIL;
+    }
+
+    // check its execution state (it shouldn't have run yet)
+    if (si->state != SPAWN_STATE_READY) {
+        return SPAWN_ERR_LOAD;
+    }
+
+    // initialize the messaging channels for the process
+
+    lmp_chan_init(chan);
+    chan->local_cap = endpoint;
+    chan->endpoint = ep;
+    err = lmp_chan_alloc_recv_slot(chan);
+    DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
+
+    err = lmp_chan_register_recv(chan, ws, MKCLOSURE(get_remote_cap, chan));
+    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
+
+    // TODO: set the receive handler from aos_recv_handler_fn
+
+    return SYS_ERR_OK;
 }
 
 
@@ -651,4 +663,26 @@ errval_t spawn_set_recv_handler(struct spawninfo *si, aos_recv_handler_fn handle
     //  - set the custom receive handler for the message channel
     USER_PANIC("Not implemented");
     return LIB_ERR_NOT_IMPLEMENTED;
+}
+
+static void get_remote_cap(void* arg)
+{
+    errval_t err;
+    struct lmp_recv_msg dumdum = LMP_RECV_MSG_INIT;
+    struct capref remote_cap;
+
+    // Get remote cap from child
+    err = lmp_chan_recv((struct lmp_chan *) arg, &dumdum, &remote_cap);
+    if (err_is_fail(err)) {
+        printf("get_remote_cap: failed to get remote endpoint capability\n");
+        return;
+    }
+    ((struct lmp_chan *) arg)->remote_cap = remote_cap;
+
+    // Send ack to child that remote cap was received
+    err = lmp_chan_send0(((struct lmp_chan *) arg), LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+    if (err_is_fail(err)) {
+        printf("get_remote_cap: failed to send ack to remote endpoint capability\n");
+        return;
+    }
 }

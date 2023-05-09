@@ -148,14 +148,50 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     lmp_endpoint_init();
 
     // HINT: Use init_domain to check if we are the init domain.
+    if (init_domain) {
+        return SYS_ERR_OK;
+    }
 
-    // TODO MILESTONE 3: register ourselves with init
+    // MILESTONE 3: register ourselves with init
+
     /* allocate lmp channel structure */
+    struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
+    if (chan == NULL) {
+        debug_printf("malloc failed\n");
+        return LIB_ERR_MALLOC_FAIL;
+    }
+    lmp_chan_init(chan);
+
     /* create local endpoint */
+    struct capref endpoint;
+    struct lmp_endpoint *ep;
+    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
+    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
+    chan->local_cap = endpoint;
+    chan->endpoint = ep;
+
     /* set remote endpoint to init's endpoint */
+    chan->remote_cap = cap_initep;
+
     /* set receive handler */
+    err = lmp_chan_alloc_recv_slot(chan);
+    DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
+    err = lmp_chan_register_recv(chan, default_ws, NOP_CLOSURE);
+    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
+
     /* send local ep to init */
+    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, endpoint);
+    DEBUG_ERR_ON_FAIL(err, "get_remote_cap: failed to send ack to remote endpoint capability\n");
+
     /* wait for init to acknowledge receiving the endpoint */
+    struct lmp_recv_msg dumdum = LMP_RECV_MSG_INIT;
+    while (true) {
+        err = lmp_chan_recv(chan, &dumdum, &NULL_CAP);
+        if (!err_is_fail(err)) {
+            break;
+        }
+    }
+
     /* initialize init RPC client with lmp channel */
     /* set init RPC client in our program state */
 

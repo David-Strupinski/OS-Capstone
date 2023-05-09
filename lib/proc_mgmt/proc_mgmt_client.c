@@ -51,13 +51,18 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
                                    coreid_t core, domainid_t *pid)
 {
     errval_t err;
+    struct capref cnode_cap;
 
-    if (capc != 0) {
-        USER_PANIC("handling of cap sending is not yet implemented!")
+    if (capc == 0) {
+        cnode_cap = NULL_CAP;
+    } else {
+        cnode_cap = capv[0];
     }
     // TODO: prepare the caps to be sent. Note, we can just send one cap...
     struct aos_rpc *chan = aos_rpc_get_process_channel();
-    return aos_rpc_proc_spawn_with_caps(chan, argc, argv, capc, cnode_cap, core, pid);
+    err = aos_rpc_proc_spawn_with_caps(chan, argc, argv, capc, cnode_cap, core, pid);
+    DEBUG_ERR_ON_FAIL(err, "aos_rpc_proc_spawn_with_caps");
+    return err;
 }
 
 
@@ -118,6 +123,9 @@ errval_t proc_mgmt_spawn_program(const char *path, coreid_t core, domainid_t *pi
  */
 errval_t proc_mgmt_ps(struct proc_status **ps, size_t *num)
 {
+    (void)ps;
+    (void)num;
+
     // TODO:
     // - obtain the status of the processes running in the system
     USER_PANIC("not implemented");

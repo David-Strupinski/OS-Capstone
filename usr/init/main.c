@@ -185,6 +185,12 @@ int main(int argc, char *argv[])
             platform = "UNKNOWN";
     }
 
+    // atrocious, random line of code here
+    err = cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPointLMP, 0);
+    if (err_is_fail(err)) {
+        return err_push(err, LIB_ERR_CAP_RETYPE);
+    }
+
     // this print statement should remain here
     grading_printf("init domain starting on core %" PRIuCOREID " (%s)\n", my_core_id, platform);
     fflush(stdout);

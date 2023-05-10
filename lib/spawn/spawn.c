@@ -397,12 +397,6 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
     DEBUG_ERR_ON_FAIL(err, "copying self referencing cap to child\n");
 
-    struct capref cap_initep_child;
-    cap_initep_child.cnode = child_task_cnode;
-    cap_initep_child.slot = TASKCN_SLOT_INITEP;
-    err = cap_copy(cap_initep_child, cap_selfep);
-    DEBUG_ERR_ON_FAIL(err, "copying parent's self endpoint to INITEP slot in child taskcnode\n");
-
     si->state           = SPAWN_STATE_READY;
     si->dispatcher      = dispatcher;
     si->cap_l1_cnode    = cap_l1_cnode;
@@ -611,42 +605,55 @@ errval_t spawn_cleanup(struct spawninfo *si)
  */
 errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_handler_fn handler)
 {
-    // make compiler happy about unused parameters
-    (void)si;
-    (void)ws;
-    (void)handler;
     errval_t err;
+    
+    // make compiler happy about unused parameters
+    (void)handler;
 
-    // create the required capabilities if needed
+    // check the execution state of the process (it shouldn't have run yet)
+    if (si->state != SPAWN_STATE_READY) {
+        return SPAWN_ERR_LOAD;
+    }
 
-    struct capref endpoint;
-    struct lmp_endpoint *ep;
-    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
-    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
-    // debug_print_cap_at_capref(endpoint);
-
+    // create the struct chan
     struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
     if (chan == NULL) {
         debug_printf("malloc failed\n");
         return LIB_ERR_MALLOC_FAIL;
     }
-
-    // check its execution state (it shouldn't have run yet)
-    if (si->state != SPAWN_STATE_READY) {
-        return SPAWN_ERR_LOAD;
-    }
-
-    // initialize the messaging channels for the process
-
     lmp_chan_init(chan);
+
+    // create the local endpoint.
+    struct capref endpoint;
+    struct lmp_endpoint *ep;
+    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
+    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
+
+    // initialize the messaging channel for the process
     chan->local_cap = endpoint;
     chan->remote_cap = NULL_CAP;
     chan->endpoint = ep;
     err = lmp_chan_alloc_recv_slot(chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
+    // give the child init's endpoint
+    struct capref cap_initep_child;
+    cap_initep_child.cnode = si->child_selfep.cnode;  // child_task_cnode
+    cap_initep_child.slot = TASKCN_SLOT_INITEP;
+    err = cap_copy(cap_initep_child, chan->local_cap); 
+    DEBUG_ERR_ON_FAIL(err, "copying parent's self endpoint to INITEP slot in child taskcnode\n");
+
+    printf("init local and remote caps:\n");
+    debug_print_cap_at_capref(chan->local_cap);
+    debug_print_cap_at_capref(chan->remote_cap);
+
+    // register our receive function
     err = lmp_chan_register_recv(chan, ws, MKCLOSURE(get_remote_cap, chan));
     DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
+
+    // creates a new local endpoint, which we've already done
+    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, chan->remote_cap);
+    // /DEBUG_ERR_ON_FAIL(err, "couldn't accept channel in parent\n");
 
     // TODO: set the receive handler from aos_recv_handler_fn
 
@@ -677,21 +684,34 @@ errval_t spawn_set_recv_handler(struct spawninfo *si, aos_recv_handler_fn handle
 static void get_remote_cap(void* arg)
 {
     errval_t err;
-    struct lmp_recv_msg dumdum = LMP_RECV_MSG_INIT;
+    struct lmp_chan *lc = arg;
+    printf("parent receive handler local and remote caps:\n");
+    debug_print_cap_at_capref(lc->local_cap);
+    debug_print_cap_at_capref(lc->remote_cap);
+
+    struct lmp_recv_msg message = LMP_RECV_MSG_INIT;
     struct capref remote_cap;
+    err = slot_alloc(&remote_cap);
 
-    // Get remote cap from child
-    err = lmp_chan_recv((struct lmp_chan *) arg, &dumdum, &remote_cap);
+    // attempt to get endpoint cap from child
+    err = lmp_chan_recv(lc, &message, &remote_cap);
     if (err_is_fail(err)) {
-        printf("get_remote_cap: failed to get remote endpoint capability\n");
-        return;
-    }
-    ((struct lmp_chan *) arg)->remote_cap = remote_cap;
+        if (!lmp_err_is_transient(err)) {
+            printf("get_remote_cap: failed to get remote endpoint capability\n");
+            return;
+        }
+    } else {
+        lc->remote_cap = remote_cap;
+        printf("new parent remote cap:\n");
+        debug_print_cap_at_capref(lc->remote_cap);
 
-    // Send ack to child that remote cap was received
-    err = lmp_chan_send0(((struct lmp_chan *) arg), LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
-    if (err_is_fail(err)) {
-        printf("get_remote_cap: failed to send ack to remote endpoint capability\n");
-        return;
+        // Send ack to child that remote cap was received
+        err = lmp_chan_send0(((struct lmp_chan *) arg), LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+        if (err_is_fail(err)) {
+            printf("get_remote_cap: failed to send ack to remote endpoint capability\n");
+            return;
+        }
     }
+
+    lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
 }

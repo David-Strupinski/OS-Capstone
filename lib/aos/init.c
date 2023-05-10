@@ -89,13 +89,15 @@ static void recv_handler(void *arg)
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     errval_t err;
 
+
+    printf("we got it!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     err = lmp_chan_recv(chan, &msg, NULL);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
     }
 
     //TODO: set to another handler maybe?
-    //lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+    lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
 }
 
 /* Set libc function pointers */
@@ -199,8 +201,15 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     err = lmp_chan_register_recv(chan, default_ws, MKCLOSURE(recv_handler, chan));
     DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child\n");
 
+    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, chan->remote_cap);
+
     /* send local ep to init */
-    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, endpoint);
+    printf("child local and remote caps:\n");
+    debug_print_cap_at_capref(chan->local_cap);
+    debug_print_cap_at_capref(chan->remote_cap);
+    err = lmp_chan_register_send(chan, get_default_waitset(), NOP_CLOSURE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't register send in child\n");
+    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, chan->local_cap);
     DEBUG_ERR_ON_FAIL(err, "failed to send selfep to remote endpoint capability\n");
 
     /* wait for init to acknowledge receiving the endpoint */

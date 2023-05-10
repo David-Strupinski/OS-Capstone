@@ -691,6 +691,7 @@ static void get_remote_cap(void* arg)
     err = lmp_chan_recv(lc, &message, &remote_cap);
     if (err_is_fail(err)) {
         if (!lmp_err_is_transient(err)) {
+            lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
             printf("get_remote_cap: failed to get remote endpoint capability\n");
             return;
         }
@@ -706,6 +707,4 @@ static void get_remote_cap(void* arg)
             return;
         }
     }
-
-    lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
 }

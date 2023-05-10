@@ -97,7 +97,7 @@ static void recv_handler(void *arg)
     }
 
     //TODO: set to another handler maybe?
-    lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+    //lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
 }
 
 /* Set libc function pointers */
@@ -197,7 +197,8 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     err = lmp_chan_register_recv(chan, default_ws, MKCLOSURE(recv_handler, chan));
     DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child\n");
 
-    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, chan->remote_cap);
+    // creates a new local endpoint, which we've already done
+    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, chan->remote_cap);
 
     /* send local ep to init */
     printf("child local and remote caps:\n");

@@ -130,6 +130,10 @@ errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, con
     return err;
 }
 
+void dumdummy(struct aos_rpc* args);
+void dumdummy(struct aos_rpc* args) {
+    (void) args;
+}
 
 /**
  * @brief constructs a new process from the provided image pointer
@@ -404,7 +408,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->child_dispframe = child_dispframe;
     si->child_selfep    = selfep;
 
-    err = spawn_setup_ipc(si, get_default_waitset(), NULL);
+    // TODO: PLZFIX: remove me and move me to ze aos_rpc_init func. Right now only here for testing
+    err = spawn_setup_ipc(si, get_default_waitset(), dumdummy);
     DEBUG_ERR_ON_FAIL(err, "ipc setup failed\n");
 
     return SYS_ERR_OK;
@@ -606,9 +611,6 @@ errval_t spawn_cleanup(struct spawninfo *si)
 errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_handler_fn handler)
 {
     errval_t err;
-    
-    // make compiler happy about unused parameters
-    (void)handler;
 
     // check the execution state of the process (it shouldn't have run yet)
     if (si->state != SPAWN_STATE_READY) {
@@ -642,14 +644,10 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     debug_print_cap_at_capref(chan->remote_cap);
 
     // register our receive function
-    err = lmp_chan_register_recv(chan, ws, MKCLOSURE(get_remote_cap, chan));
-    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
-
-    // creates a new local endpoint, which we've already done
-    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, chan->remote_cap);
-    // /DEBUG_ERR_ON_FAIL(err, "couldn't accept channel in parent\n");
-
-    // TODO: set the receive handler from aos_recv_handler_fn
+    si->chan = chan;
+    si->handler = handler;
+    err = lmp_chan_register_recv(si->chan, ws, MKCLOSURE(get_remote_cap, si));
+    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n"); 
 
     return SYS_ERR_OK;
 }
@@ -665,20 +663,18 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
  */
 errval_t spawn_set_recv_handler(struct spawninfo *si, aos_recv_handler_fn handler)
 {
-    // make compiler happy about unused parameters
-    (void)si;
-    (void)handler;
-
-    // TODO:
-    //  - set the custom receive handler for the message channel
-    USER_PANIC("Not implemented");
-    return LIB_ERR_NOT_IMPLEMENTED;
+    si->handler = handler;
+    errval_t err = lmp_chan_register_recv(si->chan, get_default_waitset(), 
+                   MKCLOSURE((void (*)(void *)) si->handler, NULL));
+    DEBUG_ERR_ON_FAIL(err, "spawn_set_recv_handler: failed to register receive handler\n");
+    return SYS_ERR_OK;
 }
 
 static void get_remote_cap(void* arg)
 {
     errval_t err;
-    struct lmp_chan *lc = arg;
+    struct spawninfo *si = arg;
+    struct lmp_chan *lc = si->chan;
     printf("parent receive handler local and remote caps:\n");
     debug_print_cap_at_capref(lc->local_cap);
     debug_print_cap_at_capref(lc->remote_cap);
@@ -701,9 +697,17 @@ static void get_remote_cap(void* arg)
         debug_print_cap_at_capref(lc->remote_cap);
 
         // Send ack to child that remote cap was received
-        err = lmp_chan_send0(((struct lmp_chan *) arg), LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+        err = lmp_chan_send0(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
         if (err_is_fail(err)) {
             printf("get_remote_cap: failed to send ack to remote endpoint capability\n");
+            return;
+        }
+        
+        // Set aos_recv_handler_fun passed into spawn_setup_ipc
+        err = lmp_chan_register_recv(lc, get_default_waitset(), 
+                                     MKCLOSURE((void (*)(void *)) si->handler, NULL));
+        if (err_is_fail(err)) {
+            printf("get_remote_cap: failed to register aos_recv_handler_fun\n");
             return;
         }
     }

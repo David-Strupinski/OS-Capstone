@@ -179,16 +179,7 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     }
 
     /* create local endpoint */
-    struct capref remote_ep = {
-        .cnode = {
-            .croot = get_croot_addr(cap_root),
-            .cnode = ROOTCN_SLOT_ADDR(ROOTCN_SLOT_TASKCN),
-            .level = CNODE_TYPE_OTHER,
-        },
-        .slot = TASKCN_SLOT_INITEP,
-    };
-
-    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, remote_ep);
+    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
     DEBUG_ERR_ON_FAIL(err, "initializing lmp channel\n");
 
     /* set receive handler */
@@ -196,9 +187,6 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
     err = lmp_chan_register_recv(chan, default_ws, MKCLOSURE(recv_handler, chan));
     DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child\n");
-
-    // creates a new local endpoint, which we've already done
-    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, chan->remote_cap);
 
     /* send local ep to init */
     printf("child local and remote caps:\n");

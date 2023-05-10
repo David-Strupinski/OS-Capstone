@@ -43,7 +43,7 @@ errval_t grading_run_tests_rpc(void)
     // run them on core 0 only, core 1 tests come in M5 / M6
     coreid_t core = disp_get_core_id();
     if (core != 0) {
-        return SYS_ERR_OK;
+        //return SYS_ERR_OK;
     }
 
     grading_printf("#################################################\n");

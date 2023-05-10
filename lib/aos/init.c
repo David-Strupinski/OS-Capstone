@@ -178,9 +178,24 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
         return LIB_ERR_MALLOC_FAIL;
     }
 
-    /* create local endpoint */
+    /* create local chan to init */
+    // TODO: should only be for monitor and mem servers!!!
     err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
-    DEBUG_ERR_ON_FAIL(err, "initializing lmp channel\n");
+    DEBUG_ERR_ON_FAIL(err, "initializing init lmp channel\n");
+
+    // TODO: uncomment below once caps are set up
+
+    // create chan to memory server
+    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_memserv);
+    // DEBUG_ERR_ON_FAIL(err, "initializing memory lmp channel\n");
+
+    // // create chan to process server
+    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_procserv);
+    // DEBUG_ERR_ON_FAIL(err, "initializing process lmp channel\n");
+
+    // // create chan to terminal server
+    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_terminal);
+    // DEBUG_ERR_ON_FAIL(err, "initializing terminal lmp channel\n");
 
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(chan);

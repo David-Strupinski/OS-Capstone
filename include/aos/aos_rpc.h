@@ -41,6 +41,9 @@ typedef void (*aos_recv_handler_fn)(struct aos_rpc *ac);
 
 struct aos_rpc {
     // TODO(M3): Add state
+    // enum aos_rpc_transport transport;  // for M6, should always be LMP for now
+    struct lmp_chan *lmp_chan;
+    aos_recv_handler_fn recv_handler;
 };
 
 /**

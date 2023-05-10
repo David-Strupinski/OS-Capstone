@@ -27,6 +27,22 @@
  * ===============================================================================================
  */
 
+
+/**
+ * @brief Initialize an aos_rpc struct.
+ *
+ * @param[in] rpc  The aos_rpc struct to initialize.
+ *
+ * @returns SYS_ERR_OK on success, or error value on failure
+ */
+errval_t aos_rpc_init(struct aos_rpc *rpc) {
+    rpc->lmp_chan = malloc(sizeof(struct lmp_chan));
+    lmp_chan_init(rpc->lmp_chan);
+
+    return SYS_ERR_OK;
+}
+
+
 /**
  * @brief Send a single number over an RPC channel.
  *
@@ -45,6 +61,26 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
 
     // TODO: implement functionality to send a number over the channel
     // given channel and wait until the ack gets returned.
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+
+    err = lmp_chan_register_send(lc, get_default_waitset(), NOP_CLOSURE);
+
+    err = lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, num);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), NOP_CLOSURE);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_register_recv");
+
+    debug_print_cap_at_capref(lc->remote_cap);
+
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    err = lmp_chan_recv(lc, &msg, NULL);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_recv");
+
     return SYS_ERR_OK;
 }
 
@@ -480,8 +516,18 @@ errval_t aos_rpc_proc_kill_all(struct aos_rpc *chan, const char *name)
 struct aos_rpc *aos_rpc_get_init_channel(void)
 {
     // TODO: Return channel to talk to init process
-    debug_printf("aos_rpc_get_init_channel NYI\n");
-    return NULL;
+    errval_t err;
+
+    struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
+    if (rpc == NULL) {
+        printf("aos_rpc_get_init_channel: malloc failed\n");
+        return NULL;
+    }
+    aos_rpc_init(rpc);
+
+    err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
+
+    return rpc;
 }
 
 /**
@@ -491,8 +537,20 @@ struct aos_rpc *aos_rpc_get_memory_channel(void)
 {
     // TODO: Return channel to talk to memory server process (or whoever
     // implements memory server functionality)
-    debug_printf("aos_rpc_get_memory_channel NYI\n");
     return NULL;
+    // debug_printf("aos_rpc_get_memory_channel NYI\n");
+    // errval_t err;
+
+    // struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
+    // if (rpc == NULL) {
+    //     printf("aos_rpc_get_init_channel: malloc failed\n");
+    //     return NULL;
+    // }
+    // aos_rpc_init(rpc);
+
+    // err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_memserv);
+
+    // return rpc;
 }
 
 /**
@@ -502,8 +560,20 @@ struct aos_rpc *aos_rpc_get_process_channel(void)
 {
     // TODO: Return channel to talk to process server process (or whoever
     // implements process server functionality)
-    debug_printf("aos_rpc_get_process_channel NYI\n");
     return NULL;
+    // debug_printf("aos_rpc_get_process_channel NYI\n");
+    // errval_t err;
+
+    // struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
+    // if (rpc == NULL) {
+    //     printf("aos_rpc_get_init_channel: malloc failed\n");
+    //     return NULL;
+    // }
+    // aos_rpc_init(rpc);
+
+    // err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_procserv);
+
+    // return rpc;
 }
 
 /**
@@ -513,6 +583,18 @@ struct aos_rpc *aos_rpc_get_serial_channel(void)
 {
     // TODO: Return channel to talk to serial driver/terminal process (whoever
     // implements print/read functionality)
-    debug_printf("aos_rpc_get_serial_channel NYI\n");
     return NULL;
+    // debug_printf("aos_rpc_get_serial_channel NYI\n");
+    // errval_t err;
+
+    // struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
+    // if (rpc == NULL) {
+    //     printf("aos_rpc_get_init_channel: malloc failed\n");
+    //     return NULL;
+    // }
+    // aos_rpc_init(rpc);
+
+    // err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_terminal);
+
+    // return rpc;
 }

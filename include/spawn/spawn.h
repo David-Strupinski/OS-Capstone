@@ -86,6 +86,7 @@ struct spawninfo {
     struct capref cap_l1_cnode;
     struct capref child_table;
     struct capref child_dispframe;
+    struct capref child_selfep;
 
     // elfimg data
     struct mem_region *module;

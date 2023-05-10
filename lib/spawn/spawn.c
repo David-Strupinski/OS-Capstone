@@ -402,6 +402,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->cap_l1_cnode    = cap_l1_cnode;
     si->child_table     = child_table;
     si->child_dispframe = child_dispframe;
+    si->child_selfep    = selfep;
 
     err = spawn_setup_ipc(si, get_default_waitset(), NULL);
     DEBUG_ERR_ON_FAIL(err, "ipc setup failed\n");
@@ -616,6 +617,7 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     struct lmp_endpoint *ep;
     err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
     DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
+    // debug_print_cap_at_capref(endpoint);
 
     struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
     if (chan == NULL) {
@@ -631,13 +633,17 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     // initialize the messaging channels for the process
 
     lmp_chan_init(chan);
-    chan->local_cap = endpoint;
+    chan->local_cap = si->child_selfep;
+    chan->remote_cap = endpoint;
     chan->endpoint = ep;
     err = lmp_chan_alloc_recv_slot(chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
     err = lmp_chan_register_recv(chan, ws, MKCLOSURE(get_remote_cap, chan));
     DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
+
+    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, endpoint);
+    DEBUG_ERR_ON_FAIL(err, "failed to send endpoint capability to parent\n");
 
     // TODO: set the receive handler from aos_recv_handler_fn
 

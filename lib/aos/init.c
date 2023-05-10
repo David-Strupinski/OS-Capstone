@@ -83,6 +83,21 @@ static size_t dummy_terminal_read(char *buf, size_t len)
     return 0;
 }
 
+static void recv_handler(void *arg)
+{
+    struct lmp_chan *chan = arg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct capref remote_cap;
+    errval_t err;
+
+    err = lmp_chan_recv(chan, &msg, &remote_cap);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+    }
+
+    lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+}
+
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
 {
@@ -171,26 +186,29 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     chan->endpoint = ep;
 
     /* set remote endpoint to init's endpoint */
-    chan->remote_cap = cap_initep;
+    chan->remote_cap = NULL_CAP;
 
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
-    err = lmp_chan_register_recv(chan, default_ws, NOP_CLOSURE);
-    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
 
-    /* send local ep to init */
-    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, endpoint);
-    DEBUG_ERR_ON_FAIL(err, "get_remote_cap: failed to send ack to remote endpoint capability\n");
+    err = lmp_chan_register_recv(chan, default_ws, MKCLOSURE(recv_handler, chan));
+    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
 
     /* wait for init to acknowledge receiving the endpoint */
     struct lmp_recv_msg dumdum = LMP_RECV_MSG_INIT;
-    while (true) {
-        err = lmp_chan_recv(chan, &dumdum, &NULL_CAP);
-        if (!err_is_fail(err)) {
-            break;
-        }
+    struct capref child_ep;
+    slot_alloc(&child_ep);
+
+    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, NULL_CAP);
+    // DEBUG_ERR_ON_FAIL(err, "get_remote_cap: failed to accept remote endpoint capability\n");
+
+    err = lmp_chan_recv(chan, &dumdum, &child_ep);
+    if (err_is_fail(err) && lmp_err_is_transient(err)) {
+        lmp_chan_register_recv(chan, default_ws, NOP_CLOSURE);
     }
+
+    debug_print_cap_at_capref(child_ep);
 
     /* initialize init RPC client with lmp channel */
     /* set init RPC client in our program state */

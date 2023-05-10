@@ -397,6 +397,12 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     err = cap_retype(selfep, dispatcher, 0, ObjType_EndPointLMP, 0);
     DEBUG_ERR_ON_FAIL(err, "copying self referencing cap to child\n");
 
+    struct capref cap_initep_child;
+    cap_initep_child.cnode = child_task_cnode;
+    cap_initep_child.slot = TASKCN_SLOT_INITEP;
+    err = cap_copy(cap_initep_child, cap_selfep);
+    DEBUG_ERR_ON_FAIL(err, "copying parent's self endpoint to INITEP slot in child taskcnode\n");
+
     si->state           = SPAWN_STATE_READY;
     si->dispatcher      = dispatcher;
     si->cap_l1_cnode    = cap_l1_cnode;
@@ -633,17 +639,14 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     // initialize the messaging channels for the process
 
     lmp_chan_init(chan);
-    chan->local_cap = si->child_selfep;
-    chan->remote_cap = endpoint;
+    chan->local_cap = endpoint;
+    chan->remote_cap = NULL_CAP;
     chan->endpoint = ep;
     err = lmp_chan_alloc_recv_slot(chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
     err = lmp_chan_register_recv(chan, ws, MKCLOSURE(get_remote_cap, chan));
     DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
-
-    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, endpoint);
-    DEBUG_ERR_ON_FAIL(err, "failed to send endpoint capability to parent\n");
 
     // TODO: set the receive handler from aos_recv_handler_fn
 

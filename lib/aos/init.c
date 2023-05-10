@@ -87,15 +87,15 @@ static void recv_handler(void *arg)
 {
     struct lmp_chan *chan = arg;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    struct capref remote_cap;
     errval_t err;
 
-    err = lmp_chan_recv(chan, &msg, &remote_cap);
+    err = lmp_chan_recv(chan, &msg, NULL);
     if (err_is_fail(err) && lmp_err_is_transient(err)) {
         lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
     }
 
-    lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+    //TODO: set to another handler maybe?
+    //lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
 }
 
 /* Set libc function pointers */
@@ -186,30 +186,24 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     chan->endpoint = ep;
 
     /* set remote endpoint to init's endpoint */
-    chan->remote_cap = NULL_CAP;
+    struct cnoderef task_cnode;
+    task_cnode.croot = get_croot_addr(cap_root);
+    task_cnode.cnode = ROOTCN_SLOT_ADDR(ROOTCN_SLOT_TASKCN);
+    task_cnode.level = CNODE_TYPE_OTHER;
+    chan->remote_cap.cnode = task_cnode;
+    chan->remote_cap.slot = TASKCN_SLOT_INITEP;
 
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
-
     err = lmp_chan_register_recv(chan, default_ws, MKCLOSURE(recv_handler, chan));
-    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n");
+    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child\n");
+
+    /* send local ep to init */
+    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, endpoint);
+    DEBUG_ERR_ON_FAIL(err, "failed to send selfep to remote endpoint capability\n");
 
     /* wait for init to acknowledge receiving the endpoint */
-    struct lmp_recv_msg dumdum = LMP_RECV_MSG_INIT;
-    struct capref child_ep;
-    slot_alloc(&child_ep);
-
-    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, NULL_CAP);
-    // DEBUG_ERR_ON_FAIL(err, "get_remote_cap: failed to accept remote endpoint capability\n");
-
-    err = lmp_chan_recv(chan, &dumdum, &child_ep);
-    if (err_is_fail(err) && lmp_err_is_transient(err)) {
-        lmp_chan_register_recv(chan, default_ws, NOP_CLOSURE);
-    }
-
-    debug_print_cap_at_capref(child_ep);
-
     /* initialize init RPC client with lmp channel */
     /* set init RPC client in our program state */
 

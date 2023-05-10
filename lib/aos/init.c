@@ -97,7 +97,7 @@ static void recv_handler(void *arg)
     }
 
     //TODO: set to another handler maybe?
-    lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+    //lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
 }
 
 /* Set libc function pointers */

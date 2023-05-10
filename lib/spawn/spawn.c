@@ -621,18 +621,12 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
         debug_printf("malloc failed\n");
         return LIB_ERR_MALLOC_FAIL;
     }
-    lmp_chan_init(chan);
 
     // create the local endpoint.
-    struct capref endpoint;
-    struct lmp_endpoint *ep;
-    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
+    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, NULL_CAP);
     DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
 
     // initialize the messaging channel for the process
-    chan->local_cap = endpoint;
-    chan->remote_cap = NULL_CAP;
-    chan->endpoint = ep;
     err = lmp_chan_alloc_recv_slot(chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 

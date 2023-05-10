@@ -177,23 +177,19 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
         debug_printf("malloc failed\n");
         return LIB_ERR_MALLOC_FAIL;
     }
-    lmp_chan_init(chan);
 
     /* create local endpoint */
-    struct capref endpoint;
-    struct lmp_endpoint *ep;
-    err = endpoint_create(DEFAULT_LMP_BUF_WORDS, &endpoint, &ep);
-    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
-    chan->local_cap = endpoint;
-    chan->endpoint = ep;
+    struct capref remote_ep = {
+        .cnode = {
+            .croot = get_croot_addr(cap_root),
+            .cnode = ROOTCN_SLOT_ADDR(ROOTCN_SLOT_TASKCN),
+            .level = CNODE_TYPE_OTHER,
+        },
+        .slot = TASKCN_SLOT_INITEP,
+    };
 
-    /* set remote endpoint to init's endpoint */
-    struct cnoderef task_cnode;
-    task_cnode.croot = get_croot_addr(cap_root);
-    task_cnode.cnode = ROOTCN_SLOT_ADDR(ROOTCN_SLOT_TASKCN);
-    task_cnode.level = CNODE_TYPE_OTHER;
-    chan->remote_cap.cnode = task_cnode;
-    chan->remote_cap.slot = TASKCN_SLOT_INITEP;
+    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, remote_ep);
+    DEBUG_ERR_ON_FAIL(err, "initializing lmp channel\n");
 
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(chan);

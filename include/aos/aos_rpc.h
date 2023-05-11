@@ -48,6 +48,12 @@ struct aos_rpc_num_payload {
     uintptr_t val;
 };
 
+struct aos_rpc_string_payload {
+    struct aos_rpc *rpc;
+    struct capref frame;
+    size_t len;
+};
+
 // global send acknowledgement handler
 void send_ack_handler(void *arg);
 

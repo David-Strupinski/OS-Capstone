@@ -185,19 +185,10 @@ int main(int argc, char *argv[])
             platform = "UNKNOWN";
     }
 
-    // atrocious, random line of code here
     err = cap_retype(cap_selfep, cap_dispatcher, 0, ObjType_EndPointLMP, 0);
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_CAP_RETYPE);
     }
-
-    // setup rpcclient
-    // TODO: this should be done in a better way and more
-    struct aos_rpc *init_rpc_client = malloc(sizeof(struct aos_rpc));
-    err = aos_rpc_init(init_rpc_client);
-    DEBUG_ERR_ON_FAIL(err, "aos_rpc_init");
-
-    set_init_rpc(init_rpc_client);
 
     // this print statement should remain here
     grading_printf("init domain starting on core %" PRIuCOREID " (%s)\n", my_core_id, platform);

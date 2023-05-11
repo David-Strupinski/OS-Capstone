@@ -25,7 +25,6 @@
 // Helper function declarations
 errval_t spawn_elf_section_allocator(void *state, genvaddr_t base, size_t size, 
                                      uint32_t flags, void **ret);
-static void get_remote_cap(void* arg);
 
 
 /**
@@ -594,6 +593,64 @@ errval_t spawn_cleanup(struct spawninfo *si)
     return LIB_ERR_NOT_IMPLEMENTED;
 }
 
+
+static void send_ack_handler(void *arg)
+{
+    printf("REEEEEEEEEEEE (ack send)\n");
+    struct aos_rpc *rpc = arg;
+    struct lmp_chan *chan = rpc->lmp_chan;
+    errval_t err;
+
+    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "sending ack\n");
+            return;
+        }
+        err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "registering send handler\n");
+            return;
+        }
+        err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+    }
+
+    printf("REEEEEEEEEEEEEEE (ack sent)\n");
+}
+
+
+static void recv_handler(void *arg)
+{
+    printf("REEEEEEEEEEEEEE\n");
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct aos_rpc *rpc = arg;
+    errval_t err;
+
+    err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+    }
+
+    printf("remote cap received in recv_handler:\n");
+    debug_print_cap_at_capref(rpc->lmp_chan->remote_cap);
+
+    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void *) rpc));
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "registering send handler\n");
+        return;
+    }
+}
+
+
 /**
  * @brief initializes the IPC channel for the process
  *
@@ -610,6 +667,7 @@ errval_t spawn_cleanup(struct spawninfo *si)
  */
 errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_handler_fn handler)
 {
+    (void)handler;
     errval_t err;
 
     // check the execution state of the process (it shouldn't have run yet)
@@ -618,36 +676,21 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     }
 
     // create the struct chan
-    struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
-    if (chan == NULL) {
-        debug_printf("malloc failed\n");
-        return LIB_ERR_MALLOC_FAIL;
-    }
-
-    // create the local endpoint.
-    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, NULL_CAP);
-    DEBUG_ERR_ON_FAIL(err, "creating lmp endpoint to parent\n");
-
-    // initialize the messaging channel for the process
-    err = lmp_chan_alloc_recv_slot(chan);
-    DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
-
+    struct aos_rpc *rpc = aos_rpc_get_init_channel();
+    
     // give the child init's endpoint
     struct capref cap_initep_child;
     cap_initep_child.cnode = si->child_selfep.cnode;  // child_task_cnode
     cap_initep_child.slot = TASKCN_SLOT_INITEP;
-    err = cap_copy(cap_initep_child, chan->local_cap); 
+    err = cap_copy(cap_initep_child, rpc->lmp_chan->local_cap); 
     DEBUG_ERR_ON_FAIL(err, "copying parent's self endpoint to INITEP slot in child taskcnode\n");
 
-    printf("init local and remote caps:\n");
-    debug_print_cap_at_capref(chan->local_cap);
-    debug_print_cap_at_capref(chan->remote_cap);
+    // initialize the messaging channel for the process
+    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+    DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
-    // register our receive function
-    si->chan = chan;
-    si->handler = handler;
-    err = lmp_chan_register_recv(si->chan, ws, MKCLOSURE(get_remote_cap, si));
-    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child's endpoint capability\n"); 
+    err = lmp_chan_register_recv(rpc->lmp_chan, ws, MKCLOSURE(recv_handler, (void *) rpc));
+    DEBUG_ERR_ON_FAIL(err, "registering receive slot for lmp channel\n");
 
     return SYS_ERR_OK;
 }
@@ -663,57 +706,8 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
  */
 errval_t spawn_set_recv_handler(struct spawninfo *si, aos_recv_handler_fn handler)
 {
-    si->handler = handler;
-    errval_t err = lmp_chan_register_recv(si->chan, get_default_waitset(), 
-                   MKCLOSURE((void (*)(void *)) si->handler, NULL));
-    DEBUG_ERR_ON_FAIL(err, "spawn_set_recv_handler: failed to register receive handler\n");
+    (void)si;
+    (void)handler;
+
     return SYS_ERR_OK;
-}
-
-static void get_remote_cap(void* arg)
-{
-    errval_t err;
-    struct spawninfo *si = arg;
-    struct lmp_chan *lc = si->chan;
-    printf("parent receive handler local and remote caps:\n");
-    debug_print_cap_at_capref(lc->local_cap);
-    debug_print_cap_at_capref(lc->remote_cap);
-
-    struct lmp_recv_msg message = LMP_RECV_MSG_INIT;
-    struct capref remote_cap;
-    err = slot_alloc(&remote_cap);
-
-    // attempt to get endpoint cap from child
-    err = lmp_chan_recv(lc, &message, &remote_cap);
-    if (err_is_fail(err)) {
-        if (!lmp_err_is_transient(err)) {
-            lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
-            printf("get_remote_cap: failed to get remote endpoint capability\n");
-            return;
-        } else {
-            // someone proof read this please.
-            printf("\n\n\nactually executed this code\n\n\n\n");
-            lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
-            lmp_chan_recv(lc, &message, &remote_cap);
-        }
-    } else {
-        lc->remote_cap = remote_cap;
-        printf("new parent remote cap:\n");
-        debug_print_cap_at_capref(lc->remote_cap);
-
-        // Send ack to child that remote cap was received
-        err = lmp_chan_send0(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
-        if (err_is_fail(err)) {
-            printf("get_remote_cap: failed to send ack to remote endpoint capability\n");
-            return;
-        }
-        
-        // Set aos_recv_handler_fun passed into spawn_setup_ipc
-        err = lmp_chan_register_recv(lc, get_default_waitset(), 
-                                     MKCLOSURE((void (*)(void *)) si->handler, NULL));
-        if (err_is_fail(err)) {
-            printf("get_remote_cap: failed to register aos_recv_handler_fun\n");
-            return;
-        }
-    }
 }

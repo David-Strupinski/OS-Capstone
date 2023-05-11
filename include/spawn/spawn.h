@@ -91,12 +91,6 @@ struct spawninfo {
     // elfimg data
     struct mem_region *module;
     void *module_data;
-
-    // lmp channel
-    struct lmp_chan *chan;
-
-    // current lmp channel recv handler
-    aos_recv_handler_fn handler;
 };
 
 

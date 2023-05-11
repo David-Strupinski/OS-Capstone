@@ -26,6 +26,8 @@
 #include <aos/systime.h>
 #include <barrelfish_kpi/domain_params.h>
 
+#include <aos/aos_rpc.h>
+
 #include "threads_priv.h"
 #include "init.h"
 
@@ -120,6 +122,55 @@ void barrelfish_libc_glue_init(void)
 }
 
 
+static void send_handler(void *arg)
+{
+    struct aos_rpc *rpc = arg;
+    errval_t err;
+
+    printf("we got it!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    err = lmp_chan_send0(rpc->lmp_chan, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap);
+    if (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "failed to send selfep to remote endpoint capability\n");
+            return;
+        }
+        err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "couldn't register send in child\n");
+            return;
+        }
+        err = lmp_chan_send0(rpc->lmp_chan, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap);
+    }
+
+    printf("we got it to send!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+}
+
+
+static void recv_handler_ack(void *arg)
+{
+    printf("REEEEEEEEEEEEEE (ack)\n");
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct aos_rpc *rpc = arg;
+    errval_t err;
+
+    err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
+    }
+
+    printf("ack received REEEEEEEEEEEEEEEEEEE\n");
+}
+
+
 /** \brief Initialise libbarrelfish.
  *
  * This runs on a thread in every domain, after the dispatcher is setup but
@@ -172,49 +223,29 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // MILESTONE 3: register ourselves with init
 
     /* allocate lmp channel structure */
-    struct lmp_chan *chan = malloc(sizeof(struct lmp_chan));
-    if (chan == NULL) {
-        debug_printf("malloc failed\n");
-        return LIB_ERR_MALLOC_FAIL;
-    }
-
-    /* create local chan to init */
-    // TODO: should only be for monitor and mem servers!!!
-    err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
-    DEBUG_ERR_ON_FAIL(err, "initializing init lmp channel\n");
-
-    // TODO: uncomment below once caps are set up
-
-    // create chan to memory server
-    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_memserv);
-    // DEBUG_ERR_ON_FAIL(err, "initializing memory lmp channel\n");
-
-    // // create chan to process server
-    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_procserv);
-    // DEBUG_ERR_ON_FAIL(err, "initializing process lmp channel\n");
-
-    // // create chan to terminal server
-    // err = lmp_chan_accept(chan, DEFAULT_LMP_BUF_WORDS, cap_terminal);
-    // DEBUG_ERR_ON_FAIL(err, "initializing terminal lmp channel\n");
+    /* initialize init RPC client with lmp channel */
+    struct aos_rpc *rpc = aos_rpc_get_init_channel();
 
     /* set receive handler */
-    err = lmp_chan_alloc_recv_slot(chan);
+    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
-    err = lmp_chan_register_recv(chan, default_ws, MKCLOSURE(recv_handler, chan));
-    DEBUG_ERR_ON_FAIL(err, "failed to register receive handler for child\n");
 
     /* send local ep to init */
-    printf("child local and remote caps:\n");
-    debug_print_cap_at_capref(chan->local_cap);
-    debug_print_cap_at_capref(chan->remote_cap);
-    err = lmp_chan_register_send(chan, get_default_waitset(), NOP_CLOSURE);
+    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, (void *) rpc));
     DEBUG_ERR_ON_FAIL(err, "couldn't register send in child\n");
-    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, chan->local_cap);
-    DEBUG_ERR_ON_FAIL(err, "failed to send selfep to remote endpoint capability\n");
+
+    err = event_dispatch(get_default_waitset());
+    DEBUG_ERR_ON_FAIL(err, "couldn't dispatch event in child\n");
 
     /* wait for init to acknowledge receiving the endpoint */
-    /* initialize init RPC client with lmp channel */
+    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler_ack, (void *) rpc));
+    DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
+
+    err = event_dispatch(get_default_waitset());
+    DEBUG_ERR_ON_FAIL(err, "couldn't dispatch event in child\n");
+
     /* set init RPC client in our program state */
+    set_init_rpc(rpc);
 
     /* TODO MILESTONE 3: now we should have a channel with init set up and can
      * use it for the ram allocator */

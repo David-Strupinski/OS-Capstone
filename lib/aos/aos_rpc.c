@@ -18,7 +18,67 @@
 
 
 
+void send_ack_handler(void *arg)
+{
+    printf("sending ack\n");
+    struct aos_rpc *rpc = arg;
+    struct lmp_chan *chan = rpc->lmp_chan;
+    errval_t err;
 
+    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "sending ack\n");
+            return;
+        }
+        err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "registering send handler\n");
+            return;
+        }
+        err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
+    }
+
+    // printf("REEEEEEEEEEEEEEE (ack sent)\n");
+}
+
+void gen_recv_handler(void *arg)
+{
+    printf("received message\n");
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct aos_rpc *rpc = arg;
+    errval_t err;
+
+    err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+    }
+
+    // printf("remote cap received in recv_handler:\n");
+    // debug_print_cap_at_capref(rpc->lmp_chan->remote_cap);
+
+    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void *) rpc));
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "registering send handler\n");
+        return;
+    }
+
+    // reregister receive handler
+    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "reregistering receive handler\n");
+        return;
+    }
+}
 
 
 /*
@@ -43,6 +103,63 @@ errval_t aos_rpc_init(struct aos_rpc *rpc) {
 }
 
 
+static void receive_ack_handler(void *arg)
+{
+    errval_t err;
+    struct aos_rpc *rpc = (struct aos_rpc *) arg;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    err = lmp_chan_recv(lc, &msg, NULL);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "lmp_chan_recv");
+            return;
+        }
+        err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(receive_ack_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "lmp_chan_register_recv");
+            return;
+        }
+        err = lmp_chan_recv(lc, &msg, NULL);
+    }
+
+    printf("ack received!\n");
+}
+
+
+static void send_num_handler(void *arg)
+{
+    errval_t err;
+    struct aos_rpc_num_payload *payload = (struct aos_rpc_num_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    uintptr_t num = payload->val;
+
+    err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, num);
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "lmp_chan_send1");
+            return;
+        }
+        err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_num_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "lmp_chan_register_send");
+            return;
+        }
+        err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, num);
+    }
+
+    printf("number sent!\n");
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(receive_ack_handler, (void *) rpc));
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "lmp_chan_register_recv");
+        return;
+    }
+}
+
+
 /**
  * @brief Send a single number over an RPC channel.
  *
@@ -64,12 +181,15 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
+    // marshall args into num payload
+    struct aos_rpc_num_payload *payload = malloc(sizeof(struct aos_rpc_num_payload));
+    payload->rpc = rpc;
+    payload->val = num;
+
     err = lmp_chan_alloc_recv_slot(lc);
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
 
-    err = lmp_chan_register_send(lc, get_default_waitset(), NOP_CLOSURE);
-
-    err = lmp_chan_send1(lc, LMP_FLAG_SYNC, NULL_CAP, num);
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_num_handler, (void *) payload));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
 
     err = lmp_chan_register_recv(lc, get_default_waitset(), NOP_CLOSURE);

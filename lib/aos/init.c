@@ -85,22 +85,6 @@ static size_t dummy_terminal_read(char *buf, size_t len)
     return 0;
 }
 
-static void recv_handler(void *arg)
-{
-    struct lmp_chan *chan = arg;
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    errval_t err;
-
-
-    printf("we got it!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-    err = lmp_chan_recv(chan, &msg, NULL);
-    if (err_is_fail(err) && lmp_err_is_transient(err)) {
-        lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
-    }
-
-    //TODO: set to another handler maybe?
-    //lmp_chan_register_recv(chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
-}
 
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
@@ -127,8 +111,8 @@ static void send_handler(void *arg)
     struct aos_rpc *rpc = arg;
     errval_t err;
 
-    printf("we got it!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-    err = lmp_chan_send0(rpc->lmp_chan, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap);
+    printf("sending msg (not ack)\n");
+    err = lmp_chan_send0(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap);
     if (err_is_fail(err)) {
         if (!lmp_err_is_transient(err)) {
             DEBUG_ERR(err, "failed to send selfep to remote endpoint capability\n");
@@ -139,16 +123,18 @@ static void send_handler(void *arg)
             DEBUG_ERR(err, "couldn't register send in child\n");
             return;
         }
-        err = lmp_chan_send0(rpc->lmp_chan, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap);
+        err = lmp_chan_send0(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap);
     }
 
-    printf("we got it to send!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    // printf("we got it to send!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+
+    // TODO: busy wait until we recv ack
 }
 
 
 static void recv_handler_ack(void *arg)
 {
-    printf("REEEEEEEEEEEEEE (ack)\n");
+    printf("received ack\n");
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     struct aos_rpc *rpc = arg;
     errval_t err;
@@ -159,7 +145,7 @@ static void recv_handler_ack(void *arg)
             DEBUG_ERR(err, "registering receive handler\n");
             return;
         }
-        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
+        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler_ack, arg));
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "registering receive handler\n");
             return;
@@ -167,7 +153,7 @@ static void recv_handler_ack(void *arg)
         err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
     }
 
-    printf("ack received REEEEEEEEEEEEEEEEEEE\n");
+    // printf("ack received REEEEEEEEEEEEEEEEEEE\n");
 }
 
 

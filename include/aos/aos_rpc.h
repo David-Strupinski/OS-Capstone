@@ -28,9 +28,7 @@ enum aos_rpc_transport {
 
 /// type of the receive handler function.
 /// depending on your RPC implementation, maybe you want to slightly adapt this
-typedef void (*aos_recv_handler_fn)(struct aos_rpc *ac);
-
-
+typedef void (*aos_recv_handler_fn)(void *rpc);
 
 
 /**
@@ -43,6 +41,18 @@ struct aos_rpc {
     // TODO(M3): Add state
     struct lmp_chan *lmp_chan;
 };
+
+struct aos_rpc_num_payload {
+    struct aos_rpc *rpc;
+    uintptr_t val;
+};
+
+// global send acknowledgement handler
+void send_ack_handler(void *arg);
+
+// global receive handler
+void gen_recv_handler(void *arg);
+
 
 /**
  * @brief Initialize an aos_rpc struct.

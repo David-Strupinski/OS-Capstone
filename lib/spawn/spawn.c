@@ -129,10 +129,6 @@ errval_t spawn_load_with_bootinfo(struct spawninfo *si, struct bootinfo *bi, con
     return err;
 }
 
-void dumdummy(struct aos_rpc* args);
-void dumdummy(struct aos_rpc* args) {
-    (void) args;
-}
 
 /**
  * @brief constructs a new process from the provided image pointer
@@ -408,7 +404,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->child_selfep    = selfep;
 
     // TODO: PLZFIX: remove me and move me to ze aos_rpc_init func. Right now only here for testing
-    err = spawn_setup_ipc(si, get_default_waitset(), dumdummy);
+    err = spawn_setup_ipc(si, get_default_waitset(), gen_recv_handler);
     DEBUG_ERR_ON_FAIL(err, "ipc setup failed\n");
 
     return SYS_ERR_OK;
@@ -594,63 +590,6 @@ errval_t spawn_cleanup(struct spawninfo *si)
 }
 
 
-static void send_ack_handler(void *arg)
-{
-    printf("REEEEEEEEEEEE (ack send)\n");
-    struct aos_rpc *rpc = arg;
-    struct lmp_chan *chan = rpc->lmp_chan;
-    errval_t err;
-
-    err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
-    while (err_is_fail(err)) {
-        if (!lmp_err_is_transient(err)) {
-            DEBUG_ERR(err, "sending ack\n");
-            return;
-        }
-        err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "registering send handler\n");
-            return;
-        }
-        err = lmp_chan_send0(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP);
-    }
-
-    printf("REEEEEEEEEEEEEEE (ack sent)\n");
-}
-
-
-static void recv_handler(void *arg)
-{
-    printf("REEEEEEEEEEEEEE\n");
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    struct aos_rpc *rpc = arg;
-    errval_t err;
-
-    err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
-    while (err_is_fail(err)) {
-        if (!lmp_err_is_transient(err)) {
-            DEBUG_ERR(err, "registering receive handler\n");
-            return;
-        }
-        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler, arg));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "registering receive handler\n");
-            return;
-        }
-        err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
-    }
-
-    printf("remote cap received in recv_handler:\n");
-    debug_print_cap_at_capref(rpc->lmp_chan->remote_cap);
-
-    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void *) rpc));
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "registering send handler\n");
-        return;
-    }
-}
-
-
 /**
  * @brief initializes the IPC channel for the process
  *
@@ -689,7 +628,7 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
-    err = lmp_chan_register_recv(rpc->lmp_chan, ws, MKCLOSURE(recv_handler, (void *) rpc));
+    err = lmp_chan_register_recv(rpc->lmp_chan, ws, MKCLOSURE(handler, (void *) rpc));
     DEBUG_ERR_ON_FAIL(err, "registering receive slot for lmp channel\n");
 
     return SYS_ERR_OK;

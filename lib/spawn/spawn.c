@@ -690,6 +690,11 @@ static void get_remote_cap(void* arg)
             lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
             printf("get_remote_cap: failed to get remote endpoint capability\n");
             return;
+        } else {
+            // someone proof read this please.
+            printf("\n\n\nactually executed this code\n\n\n\n");
+            lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(get_remote_cap, arg));
+            lmp_chan_recv(lc, &message, &remote_cap);
         }
     } else {
         lc->remote_cap = remote_cap;

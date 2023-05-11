@@ -40,6 +40,7 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
 struct aos_rpc {
     // TODO(M3): Add state
     struct lmp_chan *lmp_chan;
+    bool waiting_on_ack;
 };
 
 struct aos_rpc_num_payload {
@@ -52,7 +53,6 @@ void send_ack_handler(void *arg);
 
 // global receive handler
 void gen_recv_handler(void *arg);
-
 
 /**
  * @brief Initialize an aos_rpc struct.

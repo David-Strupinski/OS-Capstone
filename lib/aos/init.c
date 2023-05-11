@@ -31,6 +31,8 @@
 #include "threads_priv.h"
 #include "init.h"
 
+#include <grading/grading.h>
+
 /// Are we the init domain (and thus need to take some special paths)?
 static bool init_domain;
 
@@ -110,9 +112,9 @@ static void send_handler(void *arg)
 {
     struct aos_rpc *rpc = arg;
     errval_t err;
-
+    rpc->waiting_on_ack = true;
     printf("sending msg (not ack)\n");
-    err = lmp_chan_send0(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap);
+    err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
     if (err_is_fail(err)) {
         if (!lmp_err_is_transient(err)) {
             DEBUG_ERR(err, "failed to send selfep to remote endpoint capability\n");
@@ -123,38 +125,23 @@ static void send_handler(void *arg)
             DEBUG_ERR(err, "couldn't register send in child\n");
             return;
         }
-        err = lmp_chan_send0(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap);
+        err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
     }
 
+    while(rpc->waiting_on_ack == true) {
+        printf("entered loop\n");
+        event_dispatch(get_default_waitset());
+        printf("we are in the loop\n");
+    }
+    printf("exited loop\n");
+    
     // printf("we got it to send!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 
     // TODO: busy wait until we recv ack
 }
 
 
-static void recv_handler_ack(void *arg)
-{
-    printf("received ack\n");
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    struct aos_rpc *rpc = arg;
-    errval_t err;
 
-    err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
-    while (err_is_fail(err)) {
-        if (!lmp_err_is_transient(err)) {
-            DEBUG_ERR(err, "registering receive handler\n");
-            return;
-        }
-        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler_ack, arg));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "registering receive handler\n");
-            return;
-        }
-        err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
-    }
-
-    // printf("ack received REEEEEEEEEEEEEEEEEEE\n");
-}
 
 
 /** \brief Initialise libbarrelfish.
@@ -211,21 +198,18 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     /* allocate lmp channel structure */
     /* initialize init RPC client with lmp channel */
     struct aos_rpc *rpc = aos_rpc_get_init_channel();
-
+    rpc->waiting_on_ack = false;
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
+    /* wait for init to acknowledge receiving the endpoint */
+    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, (void *) rpc));
+    DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
+
     /* send local ep to init */
     err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, (void *) rpc));
     DEBUG_ERR_ON_FAIL(err, "couldn't register send in child\n");
-
-    err = event_dispatch(get_default_waitset());
-    DEBUG_ERR_ON_FAIL(err, "couldn't dispatch event in child\n");
-
-    /* wait for init to acknowledge receiving the endpoint */
-    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_handler_ack, (void *) rpc));
-    DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
 
     err = event_dispatch(get_default_waitset());
     DEBUG_ERR_ON_FAIL(err, "couldn't dispatch event in child\n");

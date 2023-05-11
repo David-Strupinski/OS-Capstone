@@ -616,7 +616,7 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
 
     // create the struct chan
     struct aos_rpc *rpc = aos_rpc_get_init_channel();
-    
+    rpc->waiting_on_ack = false;
     // give the child init's endpoint
     struct capref cap_initep_child;
     cap_initep_child.cnode = si->child_selfep.cnode;  // child_task_cnode

@@ -537,20 +537,7 @@ struct aos_rpc *aos_rpc_get_memory_channel(void)
 {
     // TODO: Return channel to talk to memory server process (or whoever
     // implements memory server functionality)
-    return NULL;
-    // debug_printf("aos_rpc_get_memory_channel NYI\n");
-    // errval_t err;
-
-    // struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
-    // if (rpc == NULL) {
-    //     printf("aos_rpc_get_init_channel: malloc failed\n");
-    //     return NULL;
-    // }
-    // aos_rpc_init(rpc);
-
-    // err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_memserv);
-
-    // return rpc;
+    return aos_rpc_get_init_channel();
 }
 
 /**
@@ -560,20 +547,7 @@ struct aos_rpc *aos_rpc_get_process_channel(void)
 {
     // TODO: Return channel to talk to process server process (or whoever
     // implements process server functionality)
-    return NULL;
-    // debug_printf("aos_rpc_get_process_channel NYI\n");
-    // errval_t err;
-
-    // struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
-    // if (rpc == NULL) {
-    //     printf("aos_rpc_get_init_channel: malloc failed\n");
-    //     return NULL;
-    // }
-    // aos_rpc_init(rpc);
-
-    // err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_procserv);
-
-    // return rpc;
+    return aos_rpc_get_init_channel();
 }
 
 /**
@@ -583,18 +557,5 @@ struct aos_rpc *aos_rpc_get_serial_channel(void)
 {
     // TODO: Return channel to talk to serial driver/terminal process (whoever
     // implements print/read functionality)
-    return NULL;
-    // debug_printf("aos_rpc_get_serial_channel NYI\n");
-    // errval_t err;
-
-    // struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
-    // if (rpc == NULL) {
-    //     printf("aos_rpc_get_init_channel: malloc failed\n");
-    //     return NULL;
-    // }
-    // aos_rpc_init(rpc);
-
-    // err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_terminal);
-
-    // return rpc;
+    return aos_rpc_get_init_channel();
 }

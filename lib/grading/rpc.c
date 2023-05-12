@@ -28,14 +28,14 @@
 
 void grading_rpc_handle_number(uintptr_t val)
 {
-    if (grading_options.rpc_stub_enable) {
+    if (grading_options.rpc_stub_enable || true) {
         grading_printf("rpc-recv: Number %" PRIuPTR " 0x%lx\n", val, val);
     }
 }
 
 void grading_rpc_handler_string(const char *string)
 {
-    if (grading_options.rpc_stub_enable) {
+    if (grading_options.rpc_stub_enable || true) {
         size_t        len = strlen(string);
         unsigned char c   = 0;
         for (size_t i = 0; i < len; i++) {

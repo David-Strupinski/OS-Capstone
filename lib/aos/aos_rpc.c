@@ -49,32 +49,6 @@ void setup_send_handler(void *arg)
 }
 
 
-void send_ack_handler(void *arg)
-{
-    printf("sending ack\n");
-    struct aos_rpc *rpc = arg;
-    struct lmp_chan *chan = rpc->lmp_chan;
-    errval_t err;
-    printf("about to fail\n");
-    err = lmp_chan_send1(chan, 0, NULL_CAP, 0);
-    printf("made it after the send\n");
-    while (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
-        if (!lmp_err_is_transient(err)) {
-            DEBUG_ERR(err, "failed sending ack\n");
-            return;
-        }
-        err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "registering send handler\n");
-            return;
-        }
-        err = lmp_chan_send1(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 0);
-    }
-
-    printf("ack sent\n");
-}
-
 void ack_recv_handler(void *arg) {
     printf("received message\n");
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
@@ -112,103 +86,7 @@ void ack_recv_handler(void *arg) {
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
 }
 
-void gen_recv_handler(void *arg)
-{
-    printf("received message\n");
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    struct aos_rpc *rpc = arg;
-    errval_t err;
-    
-    struct capref remote_cap;
-    slot_alloc(&remote_cap);
-    err = lmp_chan_recv(rpc->lmp_chan, &msg, &remote_cap);
-    printf("reset the remote cap\n");
-    
-    printf("msg words[0]: %d\n", msg.words[0]);
-    if (msg.words[0] == 0) {
-        // is ack
-        printf("why is init receiving acks!?!?\n");
-        
-    } else if (msg.words[0] == 1) {
-        // is cap setup message
-        rpc->lmp_chan->remote_cap = remote_cap;
-        while (err_is_fail(err)) {
-            if (!lmp_err_is_transient(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-            if (err_is_fail(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
-        }
 
-        err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void *) rpc));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "registering send handler\n");
-            return;
-        }
-
-    } else if (msg.words[0] == 2) {
-        // is num
-        while (err_is_fail(err)) {
-            if (!lmp_err_is_transient(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-            if (err_is_fail(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
-        }
-
-        printf("here is the number we recieved: %d\n", msg.words[1]);
-
-        err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
-    } else if (msg.words[0] == 3) {
-        // is string
-        printf("is string\n");
-        while (err_is_fail(err)) {
-            if (!lmp_err_is_transient(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-            if (err_is_fail(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
-        }
-        printf("here is the length we recieved: %d\n", msg.words[1]);
-        debug_print_cap_at_capref(remote_cap);
-        void *buf;
-        err = paging_map_frame_attr(get_current_paging_state(), &buf, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
-
-        printf("here is the string we recieved: %s\n", buf);
-
-        err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
-    } else {
-        // i don't know
-        printf("uh oh I have no idea what this is\n");
-    }
-    
-
-    // reregister receive handler
-    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "reregistering receive handler\n");
-        return;
-    }
-
-    // allocate a new slot
-    // TODO: allocate only when needed
-    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-}
 
 
 /*
@@ -361,21 +239,11 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     payload->rpc = rpc;
     payload->val = num;
 
-    // err = lmp_chan_alloc_recv_slot(lc);
-    // DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    
     rpc->waiting_on_ack = true;
     err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_num_handler, (void *) payload));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
-    // event_dispatch(get_default_waitset());
-    // event_dispatch(get_default_waitset());
-    // err = lmp_chan_register_recv(lc, get_default_waitset(), NOP_CLOSURE);
-    // DEBUG_ERR_ON_FAIL(err, "lmp_chan_register_recv");
-
-    // debug_print_cap_at_capref(lc->remote_cap);
-
-    // struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    // err = lmp_chan_recv(lc, &msg, NULL);
-    // DEBUG_ERR_ON_FAIL(err, "lmp_chan_recv");
+    
     printf("made it to the end of number sending\n");
 
     // check for an ack

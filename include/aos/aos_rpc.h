@@ -34,6 +34,8 @@ enum msg_type {
     PUTCHAR,
     GETCHAR,
     GET_RAM_CAP,
+    SPAWN_CMDLINE,
+    PID_ACK,
 };
 
 
@@ -64,8 +66,19 @@ struct aos_rpc_string_payload {
     size_t len;
 };
 
+struct aos_rpc_cmdline_payload {
+    struct aos_rpc   *rpc;
+    struct capref     frame;
+           size_t     len;
+           coreid_t   core;
+           domainid_t pid;
+};
+
 // global send acknowledgement handler
 void send_ack_handler(void *arg);
+
+// global send ack with a pid handler
+void send_pid_handler(void *arg);
 
 // global receive handler
 void gen_recv_handler(void *arg);
@@ -76,6 +89,8 @@ void ack_recv_handler(void *arg);
 // child process setup message send handler
 void setup_send_handler(void *arg);
 
+// general handler for recieving an ack with a pid in it.
+void pid_recv_handler(void* arg);
 
 /**
  * @brief Initialize an aos_rpc struct.

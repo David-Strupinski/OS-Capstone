@@ -16,7 +16,7 @@
 #include <aos/aos_rpc.h>
 #include <grading/grading.h>
 
-bool waiting_on_ack;
+domainid_t global_pid;
 
 void setup_send_handler(void *arg)
 {
@@ -58,9 +58,10 @@ void ack_recv_handler(void *arg) {
     if (msg.words[0] != 0) {
         err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
         printf("\n\n\n\n\n made it into this loop\n\n\n\n");
+        printf("heres the pid: %d\n", msg.words[1]);
+        global_pid = msg.words[1];
         return;
     }
-    waiting_on_ack = false;
     printf("received ack\n");
         
    // printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
@@ -79,6 +80,11 @@ void ack_recv_handler(void *arg) {
     }
 
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+}
+
+void pid_recv_handler(void* arg) {
+    printf("received a pid!\n");
+    (void) arg;
 }
 
 
@@ -201,6 +207,39 @@ static void send_putchar_handler(void *arg) {
 
     printf("character sent!\n");
 }
+
+static void send_cmdline_handler(void* arg) {
+    printf("got into send cmdline handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_cmdline_payload *payload = (struct aos_rpc_cmdline_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+
+   // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
+    err = lmp_chan_send3(lc, 0, frame, SPAWN_CMDLINE, len, payload->core);
+    while (err_is_fail(err)) {
+        printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    printf("cmdline sent!\n");
+}
 /**
  * @brief Send a single number over an RPC channel.
  *
@@ -218,7 +257,6 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     (void)num;
     printf("made it in to send num api\n");
     printf("here is the number we are trying to send: %d\n", num);
-    waiting_on_ack = true;
     // TODO: implement functionality to send a number over the channel
     // given channel and wait until the ack gets returned.
     struct lmp_chan *lc = rpc->lmp_chan;
@@ -373,7 +411,6 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
     (void)c;
     printf("made it in to send char api\n");
     printf("here is the char we are trying to send: %c\n", c);
-    waiting_on_ack = true;
     // TODO: implement functionality to send a number over the channel
     // given channel and wait until the ack gets returned.
     struct lmp_chan *lc = rpc->lmp_chan;
@@ -446,18 +483,55 @@ errval_t aos_rpc_proc_spawn_with_caps(struct aos_rpc *chan, int argc, const char
  *
  * @return SYS_ERR_OK on success, or error value on failure
  */
-errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *chan, const char *cmdline, coreid_t core,
+errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdline, coreid_t core,
                                          domainid_t *newpid)
 {
     // make compiler happy about unused parameters
-    (void)chan;
+    (void)rpc;
     (void)cmdline;
     (void)core;
     (void)newpid;
 
-    // TODO: implement the process spawn with cmdline RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    errval_t err;
+    
+    // make compiler happy about unused parameters
+    
+
+    printf("entered api for spawn cmdline\n");
+    printf("here's the cmdline: %s\n", cmdline);
+    struct lmp_chan *lc = rpc->lmp_chan;
+
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    int len = strlen(cmdline);
+    printf("this is the string len: %d\n", len);
+    err = frame_alloc(&frame, len, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, len, frame, VREGION_FLAGS_READ_WRITE);
+    strcpy(buf, cmdline);
+
+    // pass the string frame and length in the payload
+    struct aos_rpc_cmdline_payload *payload = malloc(sizeof(struct aos_rpc_cmdline_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = len;
+    payload->core = core;
+    printf("here is the initial value of pid: %d\n", global_pid);
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(pid_recv_handler,     (void *)payload));
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_cmdline_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+    // check for an ack
+    
+    printf("here is the pid we recieved: %d\n", global_pid);
+    *newpid = payload->pid;
+    return SYS_ERR_OK;
 }
 
 

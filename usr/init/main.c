@@ -26,6 +26,7 @@
 
 #include "mem_alloc.h"
 #include "coreboot.h"
+#include <proc_mgmt/proc_mgmt.h>
 
 
 
@@ -149,6 +150,28 @@ void gen_recv_handler(void *arg)
         case GET_RAM_CAP:
             break;
 
+        case SPAWN_CMDLINE:
+            printf("recieved spawn cmdline message\n");
+            while (err_is_fail(err)) {
+                printf("not useless\n");
+            }
+            struct aos_rpc_cmdline_payload *payload = malloc(sizeof(struct aos_rpc_cmdline_payload));
+            
+            printf("here is the length we recieved: %d\n", msg.words[1]);
+            void *buf2;
+            err = paging_map_frame_attr(get_current_paging_state(), &buf2, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
+
+            printf("here is the string we recieved: %s\n", buf2);
+            domainid_t our_pid = -1; // TODO: DO NOT LEAVE THIS LIKE THIS
+            err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
+            if (err_is_fail(err)) {
+                printf("spawn failed\n");
+                return;
+            }
+            payload->pid = our_pid;
+            payload->rpc = rpc;
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_pid_handler, (void*) payload));
+            break;
         default:
             // i don't know
             printf("uh oh I have no idea what this is\n");
@@ -190,7 +213,29 @@ void send_ack_handler(void *arg)
     printf("ack sent\n");
 }
 
+void send_pid_handler(void *arg) {
+    printf("sending our pid\n");
+    struct aos_rpc_cmdline_payload *payload = arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct lmp_chan *chan = rpc->lmp_chan;
+    errval_t err;
+    err = lmp_chan_send2(chan, 0, NULL_CAP, PID_ACK, payload->pid);
+    while (err_is_fail(err)) {
+        printf("\n\n\n\n went into our error while loop\n\n\n\n");
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "failed sending ack\n");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "registering send handler\n");
+        //     return;
+        // }
+        // err = lmp_chan_send1(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 0);
+    }
 
+    printf("ack sent\n");
+}
 
 struct bootinfo *bi;
 

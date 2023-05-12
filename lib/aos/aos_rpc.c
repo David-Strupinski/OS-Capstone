@@ -568,7 +568,7 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     // send the frame and the length on the channel
     err = lmp_chan_alloc_recv_slot(lc);
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
-    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(pid_recv_handler,     (void *)payload));
+    //err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(pid_recv_handler,     (void *)payload));
     err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_cmdline_handler, (void *)payload));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
     event_dispatch(get_default_waitset());
@@ -576,7 +576,7 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     // check for an ack
     
     printf("here is the pid we recieved: %d\n", global_pid);
-    *newpid = payload->pid;
+    *newpid = global_pid;
     return SYS_ERR_OK;
 }
 

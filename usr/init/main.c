@@ -177,7 +177,7 @@ void gen_recv_handler(void *arg)
             err = paging_map_frame_attr(get_current_paging_state(), &buf2, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
 
             printf("here is the string we recieved: %s\n", buf2);
-            domainid_t our_pid = -1; // TODO: DO NOT LEAVE THIS LIKE THIS
+            domainid_t our_pid;
             err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
             if (err_is_fail(err)) {
                 printf("spawn failed\n");

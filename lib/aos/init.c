@@ -172,7 +172,7 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
 
     /* send local ep to init */
-    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, (void *) rpc));
+    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(setup_send_handler, (void *) rpc));
     DEBUG_ERR_ON_FAIL(err, "couldn't register send in child\n");
 
     err = event_dispatch(get_default_waitset());

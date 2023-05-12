@@ -64,7 +64,7 @@ void gen_recv_handler(void *arg);
 void ack_recv_handler(void *arg);
 
 // child process setup message send handler
-void send_handler(void *arg);
+void setup_send_handler(void *arg);
 
 
 /**

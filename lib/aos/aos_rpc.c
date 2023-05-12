@@ -17,7 +17,7 @@
 #include <grading/grading.h>
 
 
-void send_handler(void *arg)
+void setup_send_handler(void *arg)
 {
     struct aos_rpc *rpc = arg;
     errval_t err;
@@ -96,16 +96,17 @@ void ack_recv_handler(void *arg) {
     rpc->waiting_on_ack = false;
     printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
     while (err_is_fail(err)) {
-        if (!lmp_err_is_transient(err)) {
-            DEBUG_ERR(err, "registering receive handler\n");
-            return;
-        }
-        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "registering receive handler\n");
-            return;
-        }
-        err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
+        printf("\n\n\n\nthis actually ran (ack recv handler)\n\n\n\n\n");
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "registering receive handler\n");
+        //     return;
+        // }
+        // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "registering receive handler\n");
+        //     return;
+        // }
+        // err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
     }
 
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
@@ -242,9 +243,8 @@ static void send_num_handler(void *arg)
     struct lmp_chan *lc = rpc->lmp_chan;
     uintptr_t num = payload->val;
 
-    rpc->waiting_on_ack = true;
-
-    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(gen_recv_handler, (void *) rpc));
+    //rpc->waiting_on_ack = true;
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *) rpc));
 
     err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 2, num);
     while (err_is_fail(err)) {
@@ -268,7 +268,7 @@ static void send_num_handler(void *arg)
         printf("heres the address of rpc->waiting_on_ack from the num sender pov: %p\n", &(rpc->waiting_on_ack));
 
         printf("in the send num while loop\n");
-        event_dispatch(get_default_waitset());
+        //event_dispatch(get_default_waitset());
         break;
     }
     printf("after the loop\n");
@@ -297,7 +297,7 @@ static void send_string_handler(void *arg)
 
     rpc->waiting_on_ack = true;
 
-    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(gen_recv_handler, (void *)rpc));
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
     err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     while (err_is_fail(err)) {
         printf("%s\n", err_getstring(err));
@@ -322,7 +322,7 @@ static void send_string_handler(void *arg)
         printf("heres the address of rpc->waiting_on_ack from the num sender pov: %p\n", &(rpc->waiting_on_ack));
 
         printf("in the send num while loop\n");
-        event_dispatch(get_default_waitset());
+        //event_dispatch(get_default_waitset());
         break;
     }
     printf("after the loop\n");
@@ -363,10 +363,11 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
 
     // err = lmp_chan_alloc_recv_slot(lc);
     // DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
-
+    rpc->waiting_on_ack = true;
     err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_num_handler, (void *) payload));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
-    event_dispatch(get_default_waitset());
+    // event_dispatch(get_default_waitset());
+    // event_dispatch(get_default_waitset());
     // err = lmp_chan_register_recv(lc, get_default_waitset(), NOP_CLOSURE);
     // DEBUG_ERR_ON_FAIL(err, "lmp_chan_register_recv");
 
@@ -379,7 +380,8 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
 
     // check for an ack
     while (rpc->waiting_on_ack) {
-        ;
+        event_dispatch(get_default_waitset());
+        break;
     }
 
     return SYS_ERR_OK;

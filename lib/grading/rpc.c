@@ -54,7 +54,7 @@ void grading_rpc_handler_serial_getchar(void)
 
 void grading_rpc_handler_serial_putchar(char c)
 {
-    if (grading_options.rpc_stub_enable) {
+    if (grading_options.rpc_stub_enable || true) {
         grading_printf("rpc-recv: serial putchar %c\n", c);
     }
 }

@@ -173,7 +173,34 @@ static void send_string_handler(void *arg)
     printf("string sent!\n");
 }
 
+static void send_putchar_handler(void *arg) {
+    printf("got into send putchar handler\n");
+    
+    errval_t err;
+    struct aos_rpc_num_payload *payload = (struct aos_rpc_num_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    uintptr_t c = payload->val;
 
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *) rpc));
+
+    err = lmp_chan_send2(lc, 0, NULL_CAP, 4, c);
+    while (err_is_fail(err)) {
+        printf("\n\n\nlooks like the useless code wasn't useless after all.\n\n\n");
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_num_handler, arg));
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 2, num);
+    }
+
+    printf("character sent!\n");
+}
 /**
  * @brief Send a single number over an RPC channel.
  *
@@ -344,9 +371,25 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
     // make compiler happy about unused parameters
     (void)rpc;
     (void)c;
+    printf("made it in to send char api\n");
+    printf("here is the char we are trying to send: %c\n", c);
+    waiting_on_ack = true;
+    // TODO: implement functionality to send a number over the channel
+    // given channel and wait until the ack gets returned.
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+    // marshall args into num payload
+    struct aos_rpc_num_payload *payload = malloc(sizeof(struct aos_rpc_num_payload));
+    payload->rpc = rpc;
+    payload->val = c;
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_putchar_handler, (void *) payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    
+    printf("made it to the end of putchar sending\n");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+    
 
-    // TODO implement functionality to send a character to the
-    // serial port.
     return SYS_ERR_OK;
 }
 

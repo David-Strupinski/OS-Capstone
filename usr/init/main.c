@@ -115,7 +115,27 @@ void gen_recv_handler(void *arg)
         grading_rpc_handler_string(buf);
 
         err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
-    } else {
+    } else if (msg.words[0] == 4) {
+        // putchar
+        printf("recieved putchar message\n");
+        while (err_is_fail(err)) {
+            printf("\n\n\nlooks like the code ran\n\n\n");
+            // if (!lmp_err_is_transient(err)) {
+            //     DEBUG_ERR(err, "registering receive handler\n");
+            //     return;
+            // }
+            // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+            // if (err_is_fail(err)) {
+            //     DEBUG_ERR(err, "registering receive handler\n");
+            //     return;
+            // }
+            // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+        }
+        putchar(msg.words[1]);
+        grading_rpc_handler_serial_putchar(msg.words[1]);
+        err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+
+    }else {
         // i don't know
         printf("uh oh I have no idea what this is\n");
     }

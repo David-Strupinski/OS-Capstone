@@ -26,6 +26,17 @@ enum aos_rpc_transport {
 };
 
 
+enum msg_type {
+    ACK_MSG,
+    SETUP_MSG,
+    NUM_MSG,
+    STRING_MSG,
+    PUTCHAR,
+    GETCHAR,
+    GET_RAM_CAP,
+};
+
+
 /// type of the receive handler function.
 /// depending on your RPC implementation, maybe you want to slightly adapt this
 typedef void (*aos_recv_handler_fn)(void *rpc);

@@ -80,11 +80,17 @@ void send_ack_handler(void *arg);
 // global send ack with a pid handler
 void send_pid_handler(void *arg);
 
+// global send char handler (getchar)
+void send_char_handler(void *arg);
+
 // global receive handler
 void gen_recv_handler(void *arg);
 
 // global ack handler (for processes)
 void ack_recv_handler(void *arg);
+
+// for serial
+void char_recv_handler(void *arg);
 
 // child process setup message send handler
 void setup_send_handler(void *arg);

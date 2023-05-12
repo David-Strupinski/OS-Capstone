@@ -55,9 +55,8 @@ void ack_recv_handler(void *arg) {
     // printf("ack recv handler: msg words[0]: %d\n", msg.words[0]);
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(ack_recv_handler, arg));
 
-    if (msg.words[0] != 0) {
+    if (msg.words[0] == PID_ACK) {
         err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-        printf("\n\n\n\n\n made it into this loop\n\n\n\n");
         printf("heres the pid: %d\n", msg.words[1]);
         global_pid = msg.words[1];
         return;

@@ -154,11 +154,11 @@ void gen_recv_handler(void *arg)
             grading_rpc_handler_serial_getchar();
 
             // build getchar response message payload
-            struct aos_rpc_num_payload *payload = malloc(sizeof(struct aos_rpc_num_payload));
-            payload->rpc = rpc;
-            payload->val = c;
+            struct aos_rpc_num_payload *num_payload = malloc(sizeof(struct aos_rpc_num_payload));
+            num_payload->rpc = rpc;
+            num_payload->val = c;
 
-            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_char_handler, (void*) payload));
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_char_handler, (void*) num_payload));
 
             break;
 

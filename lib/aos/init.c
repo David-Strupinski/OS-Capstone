@@ -108,42 +108,6 @@ void barrelfish_libc_glue_init(void)
 }
 
 
-static void send_handler(void *arg)
-{
-    struct aos_rpc *rpc = arg;
-    errval_t err;
-    rpc->waiting_on_ack = true;
-    printf("sending msg (not ack)\n");
-    err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
-    if (err_is_fail(err)) {
-        if (!lmp_err_is_transient(err)) {
-            DEBUG_ERR(err, "failed to send selfep to remote endpoint capability\n");
-            return;
-        }
-        err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, arg));
-        if (err_is_fail(err)) {
-            DEBUG_ERR(err, "couldn't register send in child\n");
-            return;
-        }
-        err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
-    }
-
-    while(rpc->waiting_on_ack == true) {
-        printf("entered loop\n");
-        event_dispatch(get_default_waitset());
-        printf("we are in the loop\n");
-    }
-    printf("exited loop\n");
-    
-    // printf("we got it to send!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-
-    // TODO: busy wait until we recv ack
-}
-
-
-
-
-
 /** \brief Initialise libbarrelfish.
  *
  * This runs on a thread in every domain, after the dispatcher is setup but
@@ -204,8 +168,8 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
     /* wait for init to acknowledge receiving the endpoint */
-    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, (void *) rpc));
-    DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
+    // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, (void *) rpc));
+    // DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
 
     /* send local ep to init */
     err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, (void *) rpc));

@@ -60,6 +60,13 @@ void send_ack_handler(void *arg);
 // global receive handler
 void gen_recv_handler(void *arg);
 
+// global ack handler (for processes)
+void ack_recv_handler(void *arg);
+
+// child process setup message send handler
+void send_handler(void *arg);
+
+
 /**
  * @brief Initialize an aos_rpc struct.
  *

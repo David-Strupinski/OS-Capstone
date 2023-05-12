@@ -17,6 +17,38 @@
 #include <grading/grading.h>
 
 
+void send_handler(void *arg)
+{
+    struct aos_rpc *rpc = arg;
+    errval_t err;
+    rpc->waiting_on_ack = true;
+
+    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(ack_recv_handler, arg));
+    printf("sending msg (not ack)\n");
+    err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
+    if (err_is_fail(err)) {
+        printf("\n\n\nthis code actually runs!\n\n\n\n");
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "failed to send selfep to remote endpoint capability\n");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_handler, arg));
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "couldn't register send in child\n");
+        //     return;
+        // }
+        // err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
+    }
+
+    while(rpc->waiting_on_ack == true) {
+        printf("entered loop\n");
+        event_dispatch(get_default_waitset());
+        printf("we are in the loop\n");
+    }
+    printf("exited loop\n");
+}
+
+
 void send_ack_handler(void *arg)
 {
     printf("sending ack\n");
@@ -43,6 +75,42 @@ void send_ack_handler(void *arg)
     printf("ack sent\n");
 }
 
+void ack_recv_handler(void *arg) {
+    printf("received message\n");
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct aos_rpc *rpc = arg;
+    errval_t err;
+    
+    err = lmp_chan_recv(rpc->lmp_chan, &msg, NULL);
+    
+    printf("msg words[0]: %d\n", msg.words[0]);
+
+    if (msg.words[0] != 0) {
+        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(ack_recv_handler, arg));
+        err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+        return;
+    }
+
+    printf("received ack\n");
+        
+    rpc->waiting_on_ack = false;
+    printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
+    while (err_is_fail(err)) {
+        if (!lmp_err_is_transient(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+        if (err_is_fail(err)) {
+            DEBUG_ERR(err, "registering receive handler\n");
+            return;
+        }
+        err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
+    }
+
+    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+}
+
 void gen_recv_handler(void *arg)
 {
     printf("received message\n");
@@ -58,23 +126,8 @@ void gen_recv_handler(void *arg)
     printf("msg words[0]: %d\n", msg.words[0]);
     if (msg.words[0] == 0) {
         // is ack
-
-        printf("received ack\n");
+        printf("why is init receiving acks!?!?\n");
         
-        rpc->waiting_on_ack = false;
-        printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
-        while (err_is_fail(err)) {
-            if (!lmp_err_is_transient(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-            if (err_is_fail(err)) {
-                DEBUG_ERR(err, "registering receive handler\n");
-                return;
-            }
-            err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
-        }
     } else if (msg.words[0] == 1) {
         // is cap setup message
         rpc->lmp_chan->remote_cap = remote_cap;

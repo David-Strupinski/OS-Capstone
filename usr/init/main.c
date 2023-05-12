@@ -120,7 +120,6 @@ void gen_recv_handler(void *arg)
         printf("uh oh I have no idea what this is\n");
     }
 
-    event_dispatch(get_default_waitset());
     // reregister receive handler
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
     if (err_is_fail(err)) {

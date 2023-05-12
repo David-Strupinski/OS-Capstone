@@ -162,7 +162,6 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     /* allocate lmp channel structure */
     /* initialize init RPC client with lmp channel */
     struct aos_rpc *rpc = aos_rpc_get_init_channel();
-    rpc->waiting_on_ack = false;
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
@@ -174,7 +173,7 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     /* send local ep to init */
     err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(setup_send_handler, (void *) rpc));
     DEBUG_ERR_ON_FAIL(err, "couldn't register send in child\n");
-
+    err = event_dispatch(get_default_waitset());
     err = event_dispatch(get_default_waitset());
     DEBUG_ERR_ON_FAIL(err, "couldn't dispatch event in child\n");
 

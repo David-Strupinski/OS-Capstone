@@ -80,6 +80,9 @@ void send_ack(struct lmp_chan *lc);
 // global recv ack
 void recv_ack(struct lmp_chan *lc);
 
+// global recv getchar ack
+void recv_getchar_ack(struct lmp_chan *lc, char *retchar);
+
 // global send acknowledgement handler
 void send_ack_handler(void *arg);
 

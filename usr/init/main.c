@@ -146,12 +146,17 @@ void gen_recv_handler(void *arg)
             char c = getchar();
             grading_rpc_handler_serial_getchar();
 
-            // build getchar response message payload
-            struct aos_rpc_num_payload *num_payload = malloc(sizeof(struct aos_rpc_num_payload));
-            num_payload->rpc = rpc;
-            num_payload->val = c;
+            // send response message
+            err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, GETCHAR, c);
+            while (lmp_err_is_transient(err)) {
+                err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, GETCHAR, c);
+            }
 
-            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_char_handler, (void*) num_payload));
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "failed sending char\n");
+            }
+
+            printf("successfully sent ack back from getchar\n");
 
             break;
 

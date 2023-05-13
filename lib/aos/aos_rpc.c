@@ -109,6 +109,22 @@ void recv_ack(struct lmp_chan *lc)
     }
 }
 
+void recv_getchar_ack(struct lmp_chan *lc, char *retchar)
+{
+    errval_t err;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    err = lmp_chan_recv(lc, &msg, NULL);
+    while (lmp_err_is_transient(err)) {
+        err = lmp_chan_recv(lc, &msg, NULL);
+    }
+    if (msg.words[0] != GETCHAR) {
+        printf("\n\n\nreceived something other than an ack\n\n\n");
+        abort();
+    }
+    *retchar = msg.words[1];
+}
+
 
 /*
  * ===============================================================================================
@@ -131,24 +147,6 @@ errval_t aos_rpc_init(struct aos_rpc *rpc) {
     return SYS_ERR_OK;
 }
 
-static void send_getchar_handler(void *arg)
-{
-    printf("got into send char handler\n");
-    
-    errval_t err;
-    struct aos_rpc *rpc = arg;
-    struct lmp_chan *lc = rpc->lmp_chan;
-
-    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(char_recv_handler, (void *) rpc));
-
-    err = lmp_chan_send1(lc, 0, NULL_CAP, GETCHAR);
-    while (err_is_fail(err)) {
-        printf("\n\n\nlooks like the useless code wasn't useless after all.\n\n\n");
-    }
-
-    printf("char sent!\n");
-}
-
 static void send_cmdline_handler(void* arg) {
     printf("got into send cmdline handler\n");
     
@@ -165,18 +163,6 @@ static void send_cmdline_handler(void* arg) {
     err = lmp_chan_send3(lc, 0, frame, SPAWN_CMDLINE, len, payload->core);
     while (err_is_fail(err)) {
         printf("\n\n\nThis code is seriously running?!\n\n\n\n");
-        // printf("%s\n", err_getstring(err));
-        // if (!lmp_err_is_transient(err)) {
-        //     DEBUG_ERR(err, "lmp_chan_send2");
-        //     return;
-        // }
-        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
-        // printf("registered send\n");
-        // if (err_is_fail(err)) {
-        //     DEBUG_ERR(err, "lmp_chan_register_send");
-        //     return;
-        // }
-        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
     printf("cmdline sent!\n");
@@ -333,13 +319,21 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
-    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_getchar_handler, (void *) rpc));
-    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, GETCHAR);
+    while (lmp_err_is_transient(err)) {
+        err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, GETCHAR);
+    }
+    DEBUG_ERR_ON_FAIL(err, "send getchar\n");
 
-    event_dispatch(get_default_waitset());
-    event_dispatch(get_default_waitset());
+    printf("sent getchar! waiting for ack\n");
 
-    printf("got char\n");
+    // TODO: implement functionality to send a number over the channel
+    char retchar;
+    recv_getchar_ack(lc, &retchar);
+
+    printf("send getchar complete! Got char %c\n", retchar);
+
+    *retc = retchar;
 
     return SYS_ERR_OK;
 }

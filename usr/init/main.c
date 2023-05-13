@@ -29,6 +29,8 @@
 #include <proc_mgmt/proc_mgmt.h>
 
 
+// struct aos_rpc init_rpc;
+
 void send_ack(struct lmp_chan *lc)
 {
     errval_t err;
@@ -39,8 +41,12 @@ void send_ack(struct lmp_chan *lc)
         abort();
     }
 
+    printf("send_ack: sending to remote cap:\n");
+    debug_print_cap_at_capref(lc->remote_cap);
     err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, ACK_MSG);
     while (lmp_err_is_transient(err)) {
+        DEBUG_ERR(err, "sending ack\n");
+        abort();
         err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, ACK_MSG);
     }
 
@@ -72,6 +78,11 @@ void gen_recv_handler(void *arg)
         case SETUP_MSG:
             // is cap setup message
             rpc->lmp_chan->remote_cap = remote_cap;
+            // printf("\n\nGot the remote cap\n\n");
+            // debug_print_cap_at_capref(remote_cap);
+
+            // init_rpc.lmp_chan = rpc->lmp_chan;
+
             while (err_is_fail(err)) {
                 printf("\n\n\nlooks like the code ran\n\n\n");
             }
@@ -86,6 +97,8 @@ void gen_recv_handler(void *arg)
 
         case NUM_MSG:
             // is num
+            rpc->lmp_chan->remote_cap = remote_cap;
+
             while (err_is_fail(err)) {
                 printf("\n\n\nlooks like the code ran\n\n\n");
             }
@@ -94,6 +107,7 @@ void gen_recv_handler(void *arg)
             // printf("sending ack from num\n");
 
             send_ack(rpc->lmp_chan);
+            debug_print_cap_at_capref(rpc->lmp_chan->remote_cap);
 
             printf("successfully sent ack back from num\n");
 
@@ -101,6 +115,8 @@ void gen_recv_handler(void *arg)
             
         case STRING_MSG:
             // is string
+            // rpc->lmp_chan->remote_cap = remote_cap;
+
             // printf("is string\n");
             while (err_is_fail(err)) {
                 printf("\n\n\nlooks like the code ran\n\n\n");
@@ -123,6 +139,8 @@ void gen_recv_handler(void *arg)
 
         case PUTCHAR:
             // putchar
+            rpc->lmp_chan->remote_cap = remote_cap;
+
             printf("recieved putchar message\n");
             while (err_is_fail(err)) {
                 printf("\n\n\nlooks like the code ran\n\n\n");
@@ -139,6 +157,8 @@ void gen_recv_handler(void *arg)
 
         case GETCHAR:
             // getchar
+            rpc->lmp_chan->remote_cap = remote_cap;
+
             printf("recieved getchar message\n");
             while (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "registering receive handler\n");
@@ -161,10 +181,13 @@ void gen_recv_handler(void *arg)
             break;
 
         case GET_RAM_CAP:
+            // get ram cap
             break;
 
         case SPAWN_CMDLINE:
             printf("recieved spawn cmdline message\n");
+            // rpc->lmp_chan->remote_cap = remote_cap;
+
             while (err_is_fail(err)) {
                 printf("not useless\n");
             }
@@ -175,7 +198,7 @@ void gen_recv_handler(void *arg)
 
             printf("here is the string we received: %s\n", buf2);
 
-            domainid_t our_pid;
+            domainid_t our_pid = 0;
             err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
             if (err_is_fail(err)) {
                 printf("spawn failed\n");

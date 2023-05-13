@@ -18,13 +18,15 @@
 
 domainid_t global_pid;
 
-void recv_ack(struct lmp_chan *lc)
+void recv_ack(void *arg)
 {
     errval_t err;
+    struct lmp_chan *lc = (struct lmp_chan *) arg;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
     err = lmp_chan_recv(lc, &msg, NULL);
     while (lmp_err_is_transient(err)) {
+        printf("in recv ack, got transient error\n");
         err = lmp_chan_recv(lc, &msg, NULL);
     }
     
@@ -36,13 +38,18 @@ void recv_ack(struct lmp_chan *lc)
         printf("\n\n\nreceived something other than an ack\n\n\n");
         abort();
     }
+    printf("received ack!\n\n\n\n");
 }
 
 
-void recv_getchar_ack(struct lmp_chan *lc, char *retchar)
+void recv_getchar_ack(void *arg)
 {
     errval_t err;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    struct aos_rpc_char_payload *payload = arg;
+    struct lmp_chan *lc = payload->rpc->lmp_chan;
+    char *retchar = payload->c;
 
     err = lmp_chan_recv(lc, &msg, NULL);
     while (lmp_err_is_transient(err)) {
@@ -56,11 +63,15 @@ void recv_getchar_ack(struct lmp_chan *lc, char *retchar)
 }
 
 
-void recv_pid_ack(struct lmp_chan *lc, domainid_t *pid)
+void recv_pid_ack(void *arg)
 {
     printf("in recv pid ack\n");
     errval_t err;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+
+    struct aos_rpc_cmdline_payload *payload = arg;
+    struct lmp_chan *lc = payload->rpc->lmp_chan;
+    domainid_t *pid = payload->pid;
 
     err = lmp_chan_recv(lc, &msg, NULL);
     while (lmp_err_is_transient(err)) {
@@ -118,14 +129,17 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
-    err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, NUM_MSG, num);
+    printf("send num: local cap:\n");
+    debug_print_cap_at_capref(lc->local_cap);
+    err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, NUM_MSG, num);
     while (lmp_err_is_transient(err)) {
-        err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, NUM_MSG, num);
+        err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, NUM_MSG, num);
     }
     DEBUG_ERR_ON_FAIL(err, "send num\n");
 
-    printf("sent num! waiting for ack\n");
+    // printf("sent num! waiting for ack\n");
 
+    // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_ack, lc));
     recv_ack(lc);
 
     printf("made it to the end of number sending\n");
@@ -177,6 +191,7 @@ errval_t aos_rpc_send_string(struct aos_rpc *rpc, const char *string)
 
     // printf("sent string! waiting for ack\n");
 
+    // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_ack, lc));
     recv_ack(lc);
 
     printf("send string complete!\n");
@@ -250,16 +265,22 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
-    err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, GETCHAR);
+    err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, GETCHAR);
     while (lmp_err_is_transient(err)) {
-        err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, GETCHAR);
+        err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, GETCHAR);
     }
     DEBUG_ERR_ON_FAIL(err, "send getchar\n");
 
-    printf("sent getchar! waiting for ack\n");
+    // printf("sent getchar! waiting for ack\n");
 
     char retchar;
-    recv_getchar_ack(lc, &retchar);
+    struct aos_rpc_char_payload payload = {
+        .rpc = rpc,
+        .c = &retchar
+    };
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_getchar_ack, &payload));
+    recv_getchar_ack(&payload);
 
     printf("send getchar complete! Got char %c\n", retchar);
 
@@ -289,15 +310,16 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
-    err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, PUTCHAR, c);
+    err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, PUTCHAR, c);
     while (lmp_err_is_transient(err)) {
-        err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, PUTCHAR, c);
+        err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, PUTCHAR, c);
     }
     DEBUG_ERR_ON_FAIL(err, "send char\n");
 
     // printf("sent char! waiting for ack\n");
 
-    printf("sent char! waiting for ack\n");
+    // printf("sent char! waiting for ack\n");
+    // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_ack, lc));
     recv_ack(lc);
 
     printf("send char complete!\n");
@@ -400,7 +422,13 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     printf("sent spawn with cmdline! waiting for ack\n");
 
     // wait for pid ack
-    recv_pid_ack(lc, newpid);
+    struct aos_rpc_cmdline_payload payload = {
+        .rpc = rpc,
+        .pid = newpid
+    };
+
+    // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_pid_ack, &payload));
+    recv_pid_ack(&payload);
     
     printf("here is the pid we received: %d\n", global_pid);
 

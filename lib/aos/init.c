@@ -195,9 +195,11 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     }
     DEBUG_ERR_ON_FAIL(err, "couldn't send local ep to init\n");
 
-    recv_ack(rpc->lmp_chan);
+    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_ack, rpc->lmp_chan));
+    // recv_ack(rpc->lmp_chan);
 
-    // printf("init acknowledged receiving the endpoint!\n");
+    printf("init acknowledged receiving the endpoint!\n");
+    debug_print_cap_at_capref(rpc->lmp_chan->local_cap);
 
     /* set init RPC client in our program state */
     set_init_rpc(rpc);

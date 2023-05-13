@@ -61,6 +61,11 @@ struct aos_rpc_num_payload {
     uintptr_t val;
 };
 
+struct aos_rpc_char_payload {
+    struct aos_rpc *rpc;
+    char *c;
+};
+
 struct aos_rpc_string_payload {
     struct aos_rpc *rpc;
     struct capref frame;
@@ -68,24 +73,21 @@ struct aos_rpc_string_payload {
 };
 
 struct aos_rpc_cmdline_payload {
-    struct aos_rpc   *rpc;
-    struct capref     frame;
-           size_t     len;
-           coreid_t   core;
-           domainid_t pid;
+    struct aos_rpc *rpc;
+    domainid_t *pid;
 };
 
 // global send ack
 void send_ack(struct lmp_chan *lc);
 
 // global recv ack
-void recv_ack(struct lmp_chan *lc);
+void recv_ack(void *arg);
 
 // global recv getchar ack
-void recv_getchar_ack(struct lmp_chan *lc, char *retchar);
+void recv_getchar_ack(void *arg);
 
 // global recv pid ack
-void recv_pid_ack(struct lmp_chan *lc, domainid_t *pid);
+void recv_pid_ack(void *arg);
 
 // global send acknowledgement handler
 void send_ack_handler(void *arg);

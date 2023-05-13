@@ -23,12 +23,6 @@ void recv_ack(struct lmp_chan *lc)
     errval_t err;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
-    // while (!lmp_chan_can_recv(lc)) {
-        // err = event_dispatch(get_default_waitset());
-        // if (err_is_fail(err)) {
-        //     USER_PANIC_ERR(err, "in event_dispatch");
-        // }
-    // }
     err = lmp_chan_recv(lc, &msg, NULL);
     while (lmp_err_is_transient(err)) {
         err = lmp_chan_recv(lc, &msg, NULL);

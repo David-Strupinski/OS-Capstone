@@ -39,9 +39,9 @@ void send_ack(struct lmp_chan *lc)
         abort();
     }
 
-    err = lmp_chan_send1(lc, 0, NULL_CAP, ACK_MSG);
+    err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, ACK_MSG);
     while (lmp_err_is_transient(err)) {
-        err = lmp_chan_send1(lc, 0, NULL_CAP, ACK_MSG);
+        err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, ACK_MSG);
     }
 
     if (err_is_fail(err)) {

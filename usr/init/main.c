@@ -148,8 +148,8 @@ void gen_recv_handler(void *arg)
                 // }
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
-            putchar(msg.words[1]);
-            grading_rpc_handler_serial_putchar(msg.words[1]);
+            sys_print((char *) &msg.words[1], 1);
+            // grading_rpc_handler_serial_putchar(msg.words[1]);
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
             if (err_is_fail(err)) {
                 DEBUG_ERR(err, "registering send handler\n");

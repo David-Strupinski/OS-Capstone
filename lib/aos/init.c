@@ -66,17 +66,17 @@ static void libc_assert(const char *expression, const char *file,
     sys_print(buf, len < sizeof(buf) ? len : sizeof(buf));
 }
 
-__attribute__((__used__))
-static size_t syscall_terminal_write(const char *buf, size_t len)
-{
-    if(len) {
-        errval_t err = sys_print(buf, len);
-        if (err_is_fail(err)) {
-            return 0;
-        }
-    }
-    return len;
-}
+// __attribute__((__used__))
+// static size_t syscall_terminal_write(const char *buf, size_t len)
+// {
+//     if(len) {
+//         errval_t err = sys_print(buf, len);
+//         if (err_is_fail(err)) {
+//             return 0;
+//         }
+//     }
+//     return len;
+// }
 
 __attribute__((__used__))
 static size_t dummy_terminal_read(char *buf, size_t len)
@@ -87,22 +87,22 @@ static size_t dummy_terminal_read(char *buf, size_t len)
     return 0;
 }
 
-// __attribute__((__used__))
-// static size_t aos_terminal_write(const char *buf, size_t len)
-// {
-//     errval_t err;
-//     size_t i = 0;
-//     (void)buf;
+__attribute__((__used__))
+static size_t aos_terminal_write(const char *buf, size_t len)
+{
+    errval_t err;
+    size_t i = 0;
+    (void)buf;
 
-//     while (i < len) {
-//         err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), '\n');
-//         if (err_is_fail(err)) {
-//             return i;
-//         }
-//         i++;
-//     }
-//     return len;
-// }
+    while (i < len) {
+        err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), buf[i]);
+        if (err_is_fail(err)) {
+            return i;
+        }
+        i++;
+    }
+    return len;
+}
 
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
@@ -112,7 +112,7 @@ void barrelfish_libc_glue_init(void)
     // TODO: change these to use the user-space serial driver if possible
     // TODO: set these functions
     _libc_terminal_read_func = dummy_terminal_read;
-    _libc_terminal_write_func = syscall_terminal_write;
+    _libc_terminal_write_func = aos_terminal_write;
     _libc_exit_func = libc_exit;
     _libc_assert_func = libc_assert;
     /* morecore func is setup by morecore_init() */

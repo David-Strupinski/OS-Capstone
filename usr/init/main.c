@@ -33,7 +33,7 @@
 
 void gen_recv_handler(void *arg)
 {
-    // printf("received message\n");
+    // debug_printf("received message\n");
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     struct aos_rpc *rpc = arg;
     errval_t err;
@@ -41,19 +41,26 @@ void gen_recv_handler(void *arg)
     struct capref remote_cap;
     slot_alloc(&remote_cap);
     err = lmp_chan_recv(rpc->lmp_chan, &msg, &remote_cap);
+
+    // reregister receive handler
+    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, err_getstring(err));
+        return;
+    }
     
-    // printf("msg words[0]: %d\n", msg.words[0]);
+    // debug_printf("msg words[0]: %d\n", msg.words[0]);
     switch(msg.words[0]) {
         case ACK_MSG:
             // is ack
-            printf("why is init receiving acks!?!?\n");
+            debug_printf("why is init receiving acks!?!?\n");
             break;
 
         case SETUP_MSG:
             // is cap setup message
             rpc->lmp_chan->remote_cap = remote_cap;
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
 
                 // if (!lmp_err_is_transient(err)) {
                 //     DEBUG_ERR(err, "registering receive handler\n");
@@ -72,12 +79,13 @@ void gen_recv_handler(void *arg)
                 DEBUG_ERR(err, "registering send handler\n");
                 return;
             }
+            event_dispatch(get_default_waitset());
             break;
 
         case NUM_MSG:
             // is num
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
 
                 // if (!lmp_err_is_transient(err)) {
                 //     DEBUG_ERR(err, "registering receive handler\n");
@@ -91,20 +99,22 @@ void gen_recv_handler(void *arg)
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
             grading_rpc_handle_number(msg.words[1]);
-            printf("here is the number we recieved: %d\n", msg.words[1]);
+            //debug_printf("here is the number we recieved: %d\n", msg.words[1]);
 
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
             if (err_is_fail(err)) {
                 DEBUG_ERR(err, "registering send handler\n");
                 return;
             }
+            event_dispatch(get_default_waitset());
+            event_dispatch(get_default_waitset());
             break;
             
         case STRING_MSG:
             // is string
-            // printf("is string\n");
+            debug_printf("is string\n");
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
                 // if (!lmp_err_is_transient(err)) {
                 //     DEBUG_ERR(err, "registering receive handler\n");
                 //     return;
@@ -117,12 +127,12 @@ void gen_recv_handler(void *arg)
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
 
-            printf("here is the length we recieved: %d\n", msg.words[1]);
+            debug_printf("here is the length we recieved: %d\n", msg.words[1]);
             debug_print_cap_at_capref(remote_cap);
             void *buf;
             err = paging_map_frame_attr(get_current_paging_state(), &buf, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
 
-            printf("here is the string we recieved: %s\n", buf);
+            debug_printf("here is the string we recieved: %s\n", buf);
             grading_rpc_handler_string(buf);
 
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
@@ -134,9 +144,9 @@ void gen_recv_handler(void *arg)
 
         case PUTCHAR:
             // putchar
-            // printf("recieved putchar message\n");
+            // debug_printf("recieved putchar message\n");
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
                 // if (!lmp_err_is_transient(err)) {
                 //     DEBUG_ERR(err, "registering receive handler\n");
                 //     return;
@@ -149,17 +159,17 @@ void gen_recv_handler(void *arg)
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
             sys_print((char *) &msg.words[1], 1);
-            // grading_rpc_handler_serial_putchar(msg.words[1]);
+            grading_rpc_handler_serial_putchar(msg.words[1]);
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
             if (err_is_fail(err)) {
-                DEBUG_ERR(err, "registering send handler\n");
+                DEBUG_ERR(err, err_getstring(err));
                 return;
             }
             break;
 
         case GETCHAR:
             // getchar
-            printf("recieved getchar message\n");
+            debug_printf("recieved getchar message\n");
             while (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "registering receive handler\n");
             }
@@ -177,9 +187,9 @@ void gen_recv_handler(void *arg)
 
         case GET_RAM_CAP:
             // is ram cap
-            printf("is ram cap\n");
+            debug_printf("is ram cap\n");
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
                 // if (!lmp_err_is_transient(err)) {
                 //     DEBUG_ERR(err, "registering receive handler\n");
                 //     return;
@@ -192,7 +202,7 @@ void gen_recv_handler(void *arg)
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
 
-            printf("here is the request we recieved: bytes: %d alignment: %d\n", msg.words[1],
+            debug_printf("here is the request we recieved: bytes: %d alignment: %d\n", msg.words[1],
                                                                                  msg.words[2]);
 
             struct aos_rpc_ram_cap_resp_payload* resp = 
@@ -231,37 +241,32 @@ void gen_recv_handler(void *arg)
             break;
 
         case SPAWN_CMDLINE:
-            printf("recieved spawn cmdline message\n");
+            debug_printf("recieved spawn cmdline message\n");
             while (err_is_fail(err)) {
-                printf("not useless\n");
+                debug_printf("not useless\n");
             }
             struct aos_rpc_cmdline_payload *payload = malloc(sizeof(struct aos_rpc_cmdline_payload));
             
-            printf("here is the length we recieved: %d\n", msg.words[1]);
+            debug_printf("here is the length we recieved: %d\n", msg.words[1]);
             void *buf2;
             err = paging_map_frame_attr(get_current_paging_state(), &buf2, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
 
-            printf("here is the string we recieved: %s\n", buf2);
+            debug_printf("here is the string we recieved: %s\n", buf2);
             domainid_t our_pid;
             err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
             if (err_is_fail(err)) {
-                printf("spawn failed\n");
+                debug_printf("spawn failed\n");
                 return;
             }
             payload->pid = our_pid;
             payload->rpc = rpc;
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_pid_handler, (void*) payload));
+            grading_rpc_handler_process_spawn(buf2, msg.words[2]);
             break;
         default:
             // i don't know
-            printf("uh oh I have no idea what this is\n");
-    }
-
-    // reregister receive handler
-    err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-    if (err_is_fail(err)) {
-        DEBUG_ERR(err, "reregistering receive handler\n");
-        return;
+            debug_printf("received unknown message type\n");
+            abort();
     }
 
     // allocate a new slot
@@ -271,21 +276,21 @@ void gen_recv_handler(void *arg)
 
 void send_ack_handler(void *arg)
 {
-    // printf("sending ack\n");
+    // debug_printf("sending ack\n");
     struct aos_rpc *rpc = arg;
     struct lmp_chan *chan = rpc->lmp_chan;
     errval_t err;
     err = lmp_chan_send1(chan, 0, NULL_CAP, 0);
     while (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
+        debug_printf("\n\n\n\n went into our error while loop\n\n\n\n");
     }
 
-    // printf("ack sent\n");
+    // debug_printf("ack sent\n");
 }
 
 void send_char_handler(void *arg)
 {
-    printf("sending char\n");
+    debug_printf("sending char\n");
     struct aos_rpc_num_payload *payload = arg;
     struct aos_rpc *rpc = payload->rpc;
     struct lmp_chan *chan = rpc->lmp_chan;
@@ -298,18 +303,18 @@ void send_char_handler(void *arg)
 
     free(payload);
 
-    printf("char sent\n");
+    debug_printf("char sent\n");
 }
 
 void send_pid_handler(void *arg) {
-    printf("sending our pid\n");
+    debug_printf("sending our pid\n");
     struct aos_rpc_cmdline_payload *payload = arg;
     struct aos_rpc *rpc = payload->rpc;
     struct lmp_chan *chan = rpc->lmp_chan;
     errval_t err;
     err = lmp_chan_send2(chan, 0, NULL_CAP, PID_ACK, payload->pid);
     while (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
+        debug_printf("\n\n\n\n went into our error while loop\n\n\n\n");
         // if (!lmp_err_is_transient(err)) {
         //     DEBUG_ERR(err, "failed sending ack\n");
         //     return;
@@ -324,20 +329,20 @@ void send_pid_handler(void *arg) {
 
     free(payload);
 
-    printf("ack sent\n");
+    debug_printf("ack sent\n");
 }
 
 void send_ram_cap_resp_handler(void *arg) 
 {
-    printf("sending ram cap response\n");
+    debug_printf("sending ram cap response\n");
     struct aos_rpc_ram_cap_resp_payload* resp = arg;
     struct lmp_chan *chan = resp->rpc->lmp_chan;
 
     debug_print_capref(resp->ret_cap);
-    printf("sent ram cap size: %d\n", resp->ret_bytes);
+    debug_printf("sent ram cap size: %d\n", resp->ret_bytes);
     errval_t err = lmp_chan_send2(chan, 0, resp->ret_cap, RAM_CAP_ACK, resp->ret_bytes);
     while (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
+        debug_printf("\n\n\n\n went into our error while loop\n\n\n\n");
         // if (!lmp_err_is_transient(err)) {
         //     DEBUG_ERR(err, "failed sending ack\n");
         //     return;
@@ -352,7 +357,7 @@ void send_ram_cap_resp_handler(void *arg)
 
     free(resp);
 
-    printf("ram cap resp sent\n");
+    debug_printf("ram cap resp sent\n");
 }
 
 struct bootinfo *bi;

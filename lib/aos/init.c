@@ -101,6 +101,7 @@ static size_t aos_terminal_write(const char *buf, size_t len)
         }
         i++;
     }
+    debug_printf("len: %d\n", i);
     return len;
 }
 

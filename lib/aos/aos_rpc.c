@@ -877,8 +877,10 @@ struct aos_rpc *aos_rpc_get_init_channel(void)
     // TODO: Return channel to talk to init process
     errval_t        err;
     struct aos_rpc *rpc = global_rpc;
+    debug_printf("entered init channel\n");
 
-    if (global_rpc == NULL) {
+    //if (global_rpc == NULL) {
+        debug_printf("creating new aos_rpc channel\n");
         rpc = malloc(sizeof(struct aos_rpc));
         if (rpc == NULL) {
             // debug_printf("aos_rpc_get_init_channel: malloc failed\n");
@@ -887,7 +889,7 @@ struct aos_rpc *aos_rpc_get_init_channel(void)
         aos_rpc_init(rpc);
 
         err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
-    }
+    //}
 
     global_rpc = rpc;
     return rpc;

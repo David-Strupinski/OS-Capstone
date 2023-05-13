@@ -18,6 +18,7 @@
 
 #include <aos/aos.h>
 
+#define MAX_PROC_PAGES 1 << 16   // 256 mib (65536 pages)
 
 /// defines the transport backend of the RPC channel
 enum aos_rpc_transport {
@@ -37,6 +38,7 @@ enum msg_type {
     SPAWN_CMDLINE,
     PID_ACK,
     GETCHAR_ACK,
+    RAM_CAP_ACK,
 };
 
 
@@ -52,8 +54,8 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
  */
 
 struct aos_rpc {
-    // TODO(M3): Add state
     struct lmp_chan *lmp_chan;
+    domainid_t pid;
 };
 
 struct aos_rpc_num_payload {
@@ -65,6 +67,12 @@ struct aos_rpc_string_payload {
     struct aos_rpc *rpc;
     struct capref frame;
     size_t len;
+};
+
+struct aos_rpc_ram_cap_resp_payload {
+    struct aos_rpc *rpc;
+    struct capref ret_cap;
+    size_t ret_bytes;
 };
 
 struct aos_rpc_cmdline_payload {
@@ -80,6 +88,9 @@ void send_ack(struct lmp_chan *lc);
 
 // global recv ack
 void recv_ack(struct lmp_chan *lc);
+
+// global recv ramcap ack
+void recv_ramcap_ack(struct lmp_chan *lc, struct capref* ret_cap, size_t* ret_bytes);
 
 // global recv getchar ack
 void recv_getchar_ack(struct lmp_chan *lc, char *retchar);

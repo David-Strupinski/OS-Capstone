@@ -56,9 +56,6 @@ __attribute__((__used__)) static void armv8_set_registers(dispatcher_handle_t ha
 }
 
 
-
-
-
 static errval_t parse_args(const char *cmdline, int *argc, char *argv[])
 {
     // check if we have at least one argument
@@ -82,11 +79,6 @@ static errval_t parse_args(const char *cmdline, int *argc, char *argv[])
 
     return SYS_ERR_OK;
 }
-
-
-
-
-
 
 
 /**
@@ -158,10 +150,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     (void)caps;
     (void)pid;
 
-    
-
     errval_t err;
-    // TODO: error checking everywhere, I did absolutely no error checking
 
     struct capref elf_frame = {
         .cnode = cnode_module,
@@ -189,6 +178,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->cmdline[cmdline_len - 1] = '\0';
 
     si->core_id = disp_get_core_id();
+    si->pid = pid;
+    si->pages_allocated = 256;
 
     // SETUP CSPACE ---------------------------------------------------------
     // TODO: for some reason this works even when not all the cnodes 
@@ -403,7 +394,6 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     si->child_dispframe = child_dispframe;
     si->child_selfep    = selfep;
 
-    // TODO: PLZFIX: remove me and move me to ze aos_rpc_init func. Right now only here for testing
     err = spawn_setup_ipc(si, get_default_waitset(), gen_recv_handler);
     DEBUG_ERR_ON_FAIL(err, "ipc setup failed\n");
 
@@ -616,6 +606,8 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
 
     // create the struct chan
     struct aos_rpc *rpc = aos_rpc_get_init_channel();
+    rpc->pid = si->pid;
+
     // give the child init's endpoint
     struct capref cap_initep_child;
     cap_initep_child.cnode = si->child_selfep.cnode;  // child_task_cnode

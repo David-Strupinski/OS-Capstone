@@ -19,14 +19,17 @@
 /* remote (indirect through a channel) version of ram_alloc, for most domains */
 static errval_t ram_alloc_remote(struct capref *ret, size_t size, size_t alignment)
 {
-    // make compiler happy about unused parameters
-    (void)ret;
-    (void)size;
-    (void)alignment;
+    printf("getting more ram\n");
+    errval_t err;
 
-    // TODO(M4): Implement me!
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // checks are done in the calling function
+
+    // get and return a RAM capability
+    size_t ret_bytes;
+    err = aos_rpc_get_ram_cap(get_init_rpc(), size, alignment, ret, &ret_bytes);
+    return err;
 }
+
 
 
 void ram_set_affinity(uint64_t minbase, uint64_t maxlimit)
@@ -56,15 +59,15 @@ static errval_t ram_alloc_fixed(struct capref *ret, size_t size, size_t alignmen
     // we only serve multiple of base page size as allocations
     size = ROUND_UP(size, BASE_PAGE_SIZE);
 
+    // we can only allocate an alignment of base page size
+    if (alignment != BASE_PAGE_SIZE) {
+        return LIB_ERR_RAM_ALLOC_MS_CONSTRAINTS;
+    }
+
     // check if we have space here, otherwise request more memory remotely
     if (state->early_alloc_offset + size > state->early_alloc_size) {
         // we're out of memory, try to allocate remotely
         return ram_alloc_remote(ret, size, alignment);
-    }
-
-    // we can only allocate an alignment of base page size
-    if (alignment != BASE_PAGE_SIZE) {
-        return LIB_ERR_RAM_ALLOC_MS_CONSTRAINTS;
     }
 
     // we're about todo a retype, this requires a slot, the slot allocator should have enough...
@@ -73,10 +76,10 @@ static errval_t ram_alloc_fixed(struct capref *ret, size_t size, size_t alignmen
         return err_push(err, LIB_ERR_SLOT_ALLOC);
     }
 
-    // our mem shoudl be in the slot EARLYMEM
+    // our mem should be in the slot EARLYMEM
     struct capref mem_cap = { .cnode = cnode_task, .slot = TASKCN_SLOT_EARLYMEM };
 
-    // performa retype of the new regino
+    // perform a retype of the new region
     err = cap_retype(*ret, mem_cap, state->early_alloc_offset, ObjType_RAM, size);
     if (err_is_fail(err)) {
         slot_free(*ret);

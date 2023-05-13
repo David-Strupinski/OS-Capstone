@@ -296,6 +296,8 @@ void send_char_handler(void *arg)
         USER_PANIC_ERR(err, "failed sending char\n");
     }
 
+    free(payload);
+
     printf("char sent\n");
 }
 
@@ -319,6 +321,8 @@ void send_pid_handler(void *arg) {
         // }
         // err = lmp_chan_send1(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 0);
     }
+
+    free(payload);
 
     printf("ack sent\n");
 }
@@ -345,6 +349,8 @@ void send_ram_cap_resp_handler(void *arg)
         // }
         // err = lmp_chan_send1(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 0);
     }
+
+    free(resp);
 
     printf("ram cap resp sent\n");
 }

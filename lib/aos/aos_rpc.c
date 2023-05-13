@@ -344,6 +344,7 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     event_dispatch(get_default_waitset());
     event_dispatch(get_default_waitset());
     
+    free(payload);
 
     return SYS_ERR_OK;
 }
@@ -397,6 +398,7 @@ errval_t aos_rpc_send_string(struct aos_rpc *rpc, const char *string)
     event_dispatch(get_default_waitset());
     // check for an ack
    
+    free(payload);
 
     return SYS_ERR_OK;
 }
@@ -432,13 +434,13 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment
     errval_t err;
     
     // marshall args into num payload
-    struct aos_rpc_ram_cap_req_payload *payload = malloc(sizeof(struct aos_rpc_ram_cap_req_payload));
-    payload->rpc = rpc;
-    payload->bytes = bytes;
-    payload->alignment = alignment;
+    struct aos_rpc_ram_cap_req_payload payload;
+    payload.rpc = rpc;
+    payload.bytes = bytes;
+    payload.alignment = alignment;
 
     err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_ram_cap_req_handler, 
-                                 (void *) payload));
+                                 (void *) &payload));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
     
     printf("made it to the end of ram cap request sending\n");
@@ -452,7 +454,6 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment
 
     *ret_cap = global_retcap;
     *ret_bytes = global_retbytes;
-    free(payload); // looks like its good to free sometimes
     return SYS_ERR_OK;
 }
 
@@ -528,6 +529,7 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
     event_dispatch(get_default_waitset());
     event_dispatch(get_default_waitset());
     
+    free(payload);
 
     return SYS_ERR_OK;
 }
@@ -633,6 +635,9 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     
     printf("here is the pid we recieved: %d\n", global_pid);
     *newpid = global_pid;
+
+    free(payload);
+    
     return SYS_ERR_OK;
 }
 

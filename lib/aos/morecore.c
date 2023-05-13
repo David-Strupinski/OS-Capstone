@@ -143,7 +143,7 @@ static void *morecore_alloc(size_t bytes, size_t *retbytes)
     errval_t err = frame_alloc(&cap, bytes, NULL);
     *retbytes = bytes;
     if (err_is_fail(err)) {
-        printf("failed to allocate frame: %s\n", err_getstring(err));
+        // printf("failed to allocate frame: %s\n", err_getstring(err));
         return NULL;
     }
     paging_map_frame_attr_offset(get_current_paging_state(), (void**) (&curr->vaddr), bytes, cap, 0, VREGION_FLAGS_READ_WRITE);
@@ -159,7 +159,7 @@ static void *morecore_alloc(size_t bytes, size_t *retbytes)
  */
 static void morecore_free(void *base, size_t bytes)
 {
-    printf("made it into the funciotn\n");
+    // printf("made it into the funciotn\n");
     // make compiler happy about unused parameters
     (void)base;
     (void)bytes;
@@ -170,14 +170,14 @@ static void morecore_free(void *base, size_t bytes)
         if (curr->vaddr == (lvaddr_t)base) {
             paging_unmap(get_current_paging_state(),base);
             prev->next = curr->next;
-            printf("found it!\n");
+            // printf("found it!\n");
             //TODO: slab free curr
             return;
         }
         prev = curr;
         curr = curr->next;
     }
-    printf("never found it\n");
+    // printf("never found it\n");
     return;
 }
 

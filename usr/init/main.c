@@ -33,7 +33,7 @@
 
 void gen_recv_handler(void *arg)
 {
-    printf("received message\n");
+    // printf("received message\n");
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     struct aos_rpc *rpc = arg;
     errval_t err;
@@ -405,7 +405,7 @@ bsp_main(int argc, char *argv[]) {
             return LIB_ERR_NOT_IMPLEMENTED;
     }
     if (err_is_fail(err)) {
-        DEBUG_ERR(err, "Booting second core failed. Continuing.\n");
+        // DEBUG_ERR(err, "Booting second core failed. Continuing.\n");
     }
 
     // TODO: Spawn system processes, boot second core etc. here

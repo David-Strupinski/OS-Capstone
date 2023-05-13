@@ -196,7 +196,7 @@ void gen_recv_handler(void *arg)
                                                                                  msg.words[2]);
 
             struct aos_rpc_ram_cap_resp_payload* resp = 
-                malloc(sizeof(struct aos_rpc_ram_cap_req_payload)); 
+                malloc(sizeof(struct aos_rpc_ram_cap_resp_payload)); 
             resp->rpc = rpc;
             resp->ret_cap = NULL_CAP;
             resp->ret_bytes = 0;
@@ -330,8 +330,8 @@ void send_ram_cap_resp_handler(void *arg)
     struct lmp_chan *chan = resp->rpc->lmp_chan;
 
     debug_print_capref(resp->ret_cap);
-    printf("%d\n", resp->ret_bytes);
-    errval_t err = lmp_chan_send2(chan, 0, resp->ret_cap, GET_RAM_CAP, resp->ret_bytes);
+    printf("sent ram cap size: %d\n", resp->ret_bytes);
+    errval_t err = lmp_chan_send2(chan, 0, resp->ret_cap, RAM_CAP_ACK, resp->ret_bytes);
     while (err_is_fail(err)) {
         printf("\n\n\n\n went into our error while loop\n\n\n\n");
         // if (!lmp_err_is_transient(err)) {

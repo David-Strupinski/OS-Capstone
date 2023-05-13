@@ -38,6 +38,7 @@ enum msg_type {
     GET_RAM_CAP,
     SPAWN_CMDLINE,
     PID_ACK,
+    RAM_CAP_ACK,
 };
 
 
@@ -80,8 +81,6 @@ struct aos_rpc_ram_cap_req_payload {
     struct aos_rpc *rpc;
     size_t bytes;
     size_t alignment;
-    struct capref ret_cap;
-    size_t ret_bytes;
 };
 
 struct aos_rpc_ram_cap_resp_payload {
@@ -110,9 +109,6 @@ void ack_recv_handler(void *arg);
 
 // for serial
 void char_recv_handler(void *arg);
-
-// global recv ram cap response handler
-void recv_ram_cap_resp_handler(void *arg);
 
 // child process setup message send handler
 void setup_send_handler(void *arg);

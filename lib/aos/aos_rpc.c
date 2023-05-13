@@ -17,6 +17,8 @@
 #include <grading/grading.h>
 
 domainid_t global_pid;
+struct capref global_retcap;
+size_t global_retbytes;
 
 void setup_send_handler(void *arg)
 {
@@ -51,7 +53,8 @@ void ack_recv_handler(void *arg) {
     struct aos_rpc *rpc = arg;
     errval_t err;
     
-    err = lmp_chan_recv(rpc->lmp_chan, &msg, NULL);
+    struct capref retcap;
+    err = lmp_chan_recv(rpc->lmp_chan, &msg, &retcap);
     
     // printf("ack recv handler: msg words[0]: %d\n", msg.words[0]);
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(ack_recv_handler, arg));
@@ -60,6 +63,13 @@ void ack_recv_handler(void *arg) {
         err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
         printf("heres the pid: %d\n", msg.words[1]);
         global_pid = msg.words[1];
+        return;
+    } else if (msg.words[0] == RAM_CAP_ACK) {
+        err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+        debug_print_capref(retcap);
+        printf("received ram cap size: %d\n", msg.words[1]);
+        global_retcap = retcap;
+        global_retbytes = msg.words[1];
         return;
     }
     printf("received ack\n");
@@ -99,37 +109,6 @@ void char_recv_handler(void *arg) {
    // printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
     while (err_is_fail(err)) {
         printf("\n\n\n\nthis actually ran (char recv handler)\n\n\n\n\n");
-    }
-
-    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-}
-
-void recv_ram_cap_resp_handler(void *arg) {
-    printf("recv ram cap resp handler received message\n");
-
-    struct aos_rpc_ram_cap_req_payload *payload = (struct aos_rpc_ram_cap_req_payload *) arg;
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    struct aos_rpc *rpc = payload->rpc;
-    errval_t err;
-    
-    err = lmp_chan_recv(rpc->lmp_chan, &msg, &payload->ret_cap);
-    printf("received ram cap size: %d\n", msg.words[2]);
-    payload->ret_bytes = msg.words[2];
-    // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), 
-    //                             MKCLOSURE(recv_ram_cap_resp_handler, arg));
-        
-    while (err_is_fail(err)) {
-        printf("\n\n\n\nthis actually ran (ram cap recv handler)\n\n\n\n\n");
-        // if (!lmp_err_is_transient(err)) {
-        //     DEBUG_ERR(err, "registering receive handler\n");
-        //     return;
-        // }
-        // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-        // if (err_is_fail(err)) {
-        //     DEBUG_ERR(err, "registering receive handler\n");
-        //     return;
-        // }
-        // err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
     }
 
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
@@ -313,8 +292,6 @@ static void send_ram_cap_req_handler(void* arg) {
     struct aos_rpc *rpc = payload->rpc;
     struct lmp_chan *lc = rpc->lmp_chan;
 
-    err = lmp_chan_register_recv(lc, get_default_waitset(), 
-                                 MKCLOSURE(recv_ram_cap_resp_handler, arg));
     err = lmp_chan_send3(lc, 0, NULL_CAP, GET_RAM_CAP, payload->bytes, payload->alignment);
     while (err_is_fail(err)) {
         printf("\n\n\nThis code is seriously running?!\n\n\n\n");
@@ -468,16 +445,13 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment
     event_dispatch(get_default_waitset());
     event_dispatch(get_default_waitset());
 
-    printf("received ram cap and size (%d bytes)\n", payload->ret_bytes);
-    debug_print_capref(payload->ret_cap);
-
-    if (capref_is_null(payload->ret_cap)) {
+    if (capref_is_null(global_retcap)) {
         printf("downloading ram failed\n");
         return LIB_ERR_RAM_ALLOC;
     }
 
-    *ret_cap = payload->ret_cap;
-    *ret_bytes = payload->ret_bytes;
+    *ret_cap = global_retcap;
+    *ret_bytes = global_retbytes;
 
     return SYS_ERR_OK;
 }

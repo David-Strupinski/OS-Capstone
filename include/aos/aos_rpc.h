@@ -74,6 +74,12 @@ struct aos_rpc_cmdline_payload {
            domainid_t pid;
 };
 
+// global send ack
+void send_ack(struct lmp_chan *lc);
+
+// global recv ack
+void recv_ack(struct lmp_chan *lc);
+
 // global send acknowledgement handler
 void send_ack_handler(void *arg);
 

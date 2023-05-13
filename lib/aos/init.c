@@ -87,6 +87,22 @@ static size_t dummy_terminal_read(char *buf, size_t len)
     return 0;
 }
 
+// static size_t aos_terminal_write(const char *buf, size_t len)
+// {
+//     if(len) {
+        
+//     }
+//     return len;
+// }
+
+// static size_t aos_terminal_read(const char *buf, size_t len)
+// {
+//     if(len) {
+        
+//     }
+//     return len;
+// }
+
 
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
@@ -171,11 +187,17 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     // DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
 
     /* send local ep to init */
-    err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(setup_send_handler, (void *) rpc));
-    DEBUG_ERR_ON_FAIL(err, "couldn't register send in child\n");
-    err = event_dispatch(get_default_waitset());
-    err = event_dispatch(get_default_waitset());
-    DEBUG_ERR_ON_FAIL(err, "couldn't dispatch event in child\n");
+    // printf("sending local ep to init\n");
+    // err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+    err = lmp_chan_send1(rpc->lmp_chan, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, SETUP_MSG);
+    while (lmp_err_is_transient(err)) {
+        err = lmp_chan_send1(rpc->lmp_chan, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, SETUP_MSG);
+    }
+    DEBUG_ERR_ON_FAIL(err, "couldn't send local ep to init\n");
+
+    recv_ack(rpc->lmp_chan);
+
+    // printf("init acknowledged receiving the endpoint!\n");
 
     /* set init RPC client in our program state */
     set_init_rpc(rpc);

@@ -61,7 +61,7 @@ void grading_rpc_handler_serial_putchar(char c)
 
 void grading_rpc_handler_ram_cap(size_t bytes, size_t alignment)
 {
-    if (grading_options.rpc_stub_enable) {
+    if (grading_options.rpc_stub_enable || true) {
         grading_printf("rpc-recv: ram alloc bytes=%lu alignment=%lu\n", bytes, alignment);
     }
 }

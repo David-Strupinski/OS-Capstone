@@ -23,6 +23,7 @@
 #include <mm/mm.h>
 #include <grading/grading.h>
 #include <grading/io.h>
+#include <spawn/spawn.h>
 
 #include "mem_alloc.h"
 #include "coreboot.h"
@@ -76,7 +77,6 @@ void gen_recv_handler(void *arg)
             break;
 
         case SETUP_MSG:
-            // is cap setup message
             rpc->lmp_chan->remote_cap = remote_cap;
             // printf("\n\nGot the remote cap\n\n");
             // debug_print_cap_at_capref(remote_cap);
@@ -96,9 +96,6 @@ void gen_recv_handler(void *arg)
             break;
 
         case NUM_MSG:
-            // is num
-            rpc->lmp_chan->remote_cap = remote_cap;
-
             while (err_is_fail(err)) {
                 debug_printf("\n\n\nlooks like the code ran\n\n\n");
             }
@@ -137,10 +134,6 @@ void gen_recv_handler(void *arg)
             break;
 
         case PUTCHAR:
-            // putchar
-            rpc->lmp_chan->remote_cap = remote_cap;
-
-            // debug_printf("recieved putchar message\n");
             while (err_is_fail(err)) {
                 debug_printf("\n\n\nlooks like the code ran\n\n\n");
             }
@@ -158,8 +151,6 @@ void gen_recv_handler(void *arg)
 
         case GETCHAR:
             // getchar
-            rpc->lmp_chan->remote_cap = remote_cap;
-
             debug_printf("recieved getchar message\n");
             while (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "registering receive handler\n");
@@ -182,7 +173,51 @@ void gen_recv_handler(void *arg)
             break;
 
         case GET_RAM_CAP:
-            // get ram cap
+            debug_printf("received ram cap message\n");
+            while (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "registering receive handler\n");
+            }
+
+            debug_printf("here is the request we recieved: bytes: %d alignment: %d\n", msg.words[1],
+                                                                                 msg.words[2]);
+            
+            struct capref retcap = NULL_CAP;
+            size_t retbytes = 0;
+
+            // check that process hasn't exceeded mem limit
+            struct spawninfo* curr = root;
+            while (curr->next != NULL) {
+                if (curr->pid == rpc->pid)
+                    break;
+                curr = curr->next;
+            }
+            if (curr->pages_allocated + ROUND_UP(msg.words[1], BASE_PAGE_SIZE) / BASE_PAGE_SIZE <= 
+                MAX_PROC_PAGES) 
+            {
+                err = ram_alloc_aligned(&retcap, msg.words[1], msg.words[2]);
+                if (err_is_fail(err)) {
+                    DEBUG_ERR(err, "failed to allocate ram for child process\n");
+                    return;
+                }
+                retbytes = ROUND_UP(msg.words[1], BASE_PAGE_SIZE);
+
+                grading_rpc_handler_ram_cap(retbytes, msg.words[2]);
+            }
+
+            // send response message
+            err = lmp_chan_send2(rpc->lmp_chan, 0, retcap, RAM_CAP_ACK, retbytes);
+            while (lmp_err_is_transient(err)) {
+                err = lmp_chan_send2(rpc->lmp_chan, 0, retcap, RAM_CAP_ACK, retbytes);
+            }
+
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "failed sending ram cap\n");
+            }
+
+            curr->pages_allocated += retbytes / BASE_PAGE_SIZE;
+
+            debug_printf("successfully sent ack back from getramcap\n");
+
             break;
 
         case SPAWN_CMDLINE:
@@ -243,7 +278,6 @@ void gen_recv_handler(void *arg)
 
 
 struct bootinfo *bi;
-
 coreid_t my_core_id;
 struct platform_info platform_info;
 

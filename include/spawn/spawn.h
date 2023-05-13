@@ -27,6 +27,8 @@ struct elfimg;
 struct bootinfo;
 struct waitset;
 
+extern struct spawninfo* root;
+
 /**
  * @brief represents the state of the process
  */
@@ -91,6 +93,9 @@ struct spawninfo {
     // elfimg data
     struct mem_region *module;
     void *module_data;
+
+    // memory pages allocated
+    int pages_allocated;
 };
 
 

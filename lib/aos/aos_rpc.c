@@ -41,6 +41,31 @@ void recv_ack(void *arg)
     // debug_printf("received ack!\n\n\n\n");
 }
 
+void recv_ramcap_ack(struct lmp_chan *lc, struct capref* ret_cap, size_t* ret_bytes) {
+    
+    errval_t err;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct capref retcap;
+
+    err = lmp_chan_recv(lc, &msg, &retcap);
+    while (lmp_err_is_transient(err)) {
+        err = lmp_chan_recv(lc, &msg, &retcap);
+    }
+    if (msg.words[0] != RAM_CAP_ACK) {
+        printf("\n\n\nreceived something other than a ramcap ack\n\n\n");
+        abort();
+    }
+
+    debug_print_capref(retcap);
+    printf("received ram cap size: %d\n", msg.words[1]);
+
+    if (capref_is_null(retcap)) {
+        USER_PANIC("downloading ram failed\n");
+    }
+
+    *ret_cap = retcap;
+    *ret_bytes = msg.words[1];
+}
 
 void recv_getchar_ack(void *arg)
 {
@@ -97,6 +122,8 @@ void recv_pid_ack(void *arg)
  *
  * @param[in] rpc  The aos_rpc struct to initialize.
  *
+ * Note: DOES NOT SET PID. This must be done manually.
+ * 
  * @returns SYS_ERR_OK on success, or error value on failure
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc) {
@@ -223,16 +250,29 @@ errval_t aos_rpc_send_string(struct aos_rpc *rpc, const char *string)
 errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment,
                              struct capref *ret_cap, size_t *ret_bytes)
 {
-    // make compiler happy about unused parameters
-    (void)rpc;
-    (void)bytes;
-    (void)alignment;
-    (void)ret_cap;
-    (void)ret_bytes;
+    printf("made it in to download ram api\n");
+    printf("here is the size we are trying to request: %d\n", bytes);
 
-    // TODO: implement functionality to request a RAM capability over the
-    // given channel and wait until it is delivered.
-    // Hint: think about where the received cap will be stored
+    errval_t err;
+
+    struct lmp_chan *lc = rpc->lmp_chan;
+    
+    // send the bytes and alignment on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+
+    err = lmp_chan_send3(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, GET_RAM_CAP, bytes, alignment);
+    while (lmp_err_is_transient(err)) {
+        err = lmp_chan_send3(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, GET_RAM_CAP, bytes, alignment);
+    }
+    DEBUG_ERR_ON_FAIL(err, "sending ram cap request\n");
+    
+    printf("ram cap request sent!\n");
+
+    recv_ramcap_ack(lc, ret_cap, ret_bytes);
+
+    printf("requesting ramcap complete!\n");
+
     return SYS_ERR_OK;
 }
 

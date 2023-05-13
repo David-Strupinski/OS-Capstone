@@ -452,7 +452,7 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment
 
     *ret_cap = global_retcap;
     *ret_bytes = global_retbytes;
-
+    free(payload); // looks like its good to free sometimes
     return SYS_ERR_OK;
 }
 

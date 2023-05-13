@@ -18,6 +18,8 @@
 
 #include <aos/aos.h>
 
+#define MAX_PROC_PAGES 1 << 16   // 256 mib (65536 pages)
+
 
 /// defines the transport backend of the RPC channel
 enum aos_rpc_transport {
@@ -51,8 +53,8 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
  */
 
 struct aos_rpc {
-    // TODO(M3): Add state
     struct lmp_chan *lmp_chan;
+    domainid_t pid;
 };
 
 struct aos_rpc_num_payload {
@@ -74,6 +76,20 @@ struct aos_rpc_cmdline_payload {
            domainid_t pid;
 };
 
+struct aos_rpc_ram_cap_req_payload {
+    struct aos_rpc *rpc;
+    size_t bytes;
+    size_t alignment;
+    struct capref ret_cap;
+    size_t ret_bytes;
+};
+
+struct aos_rpc_ram_cap_resp_payload {
+    struct aos_rpc *rpc;
+    struct capref ret_cap;
+    size_t ret_bytes;
+};
+
 // global send acknowledgement handler
 void send_ack_handler(void *arg);
 
@@ -83,6 +99,9 @@ void send_pid_handler(void *arg);
 // global send char handler (getchar)
 void send_char_handler(void *arg);
 
+// global send ram cap response handler
+void send_ram_cap_resp_handler(void *arg); 
+
 // global receive handler
 void gen_recv_handler(void *arg);
 
@@ -91,6 +110,9 @@ void ack_recv_handler(void *arg);
 
 // for serial
 void char_recv_handler(void *arg);
+
+// global recv ram cap response handler
+void recv_ram_cap_resp_handler(void *arg);
 
 // child process setup message send handler
 void setup_send_handler(void *arg);

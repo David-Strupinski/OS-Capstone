@@ -23,6 +23,7 @@
 #include <mm/mm.h>
 #include <grading/grading.h>
 #include <grading/io.h>
+#include <spawn/spawn.h>
 
 #include "mem_alloc.h"
 #include "coreboot.h"
@@ -93,6 +94,10 @@ void gen_recv_handler(void *arg)
             printf("here is the number we recieved: %d\n", msg.words[1]);
 
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
             break;
             
         case STRING_MSG:
@@ -121,6 +126,10 @@ void gen_recv_handler(void *arg)
             grading_rpc_handler_string(buf);
 
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
             break;
 
         case PUTCHAR:
@@ -142,6 +151,10 @@ void gen_recv_handler(void *arg)
             putchar(msg.words[1]);
             grading_rpc_handler_serial_putchar(msg.words[1]);
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
             break;
 
         case GETCHAR:
@@ -163,6 +176,58 @@ void gen_recv_handler(void *arg)
             break;
 
         case GET_RAM_CAP:
+            // is ram cap
+            printf("is ram cap\n");
+            while (err_is_fail(err)) {
+                printf("\n\n\nlooks like the code ran\n\n\n");
+                // if (!lmp_err_is_transient(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+                // if (err_is_fail(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+            }
+
+            printf("here is the request we recieved: bytes: %d alignment: %d\n", msg.words[1],
+                                                                                 msg.words[2]);
+
+            struct aos_rpc_ram_cap_resp_payload* resp = 
+                malloc(sizeof(struct aos_rpc_ram_cap_req_payload)); 
+            resp->rpc = rpc;
+            resp->ret_cap = NULL_CAP;
+            resp->ret_bytes = 0;
+            
+            // check that process hasn't exceeded mem limit
+            struct spawninfo* curr = root;
+            while (curr->next != NULL) {
+                if (curr->pid == rpc->pid)
+                    break;
+                curr = curr->next;
+            }
+            if (curr->pages_allocated + ROUND_UP(msg.words[1], BASE_PAGE_SIZE) / BASE_PAGE_SIZE <= 
+                MAX_PROC_PAGES) 
+            {
+                err = ram_alloc_aligned(&resp->ret_cap, msg.words[1], msg.words[2]);
+                if (err_is_fail(err)) {
+                    DEBUG_ERR(err, "failed to allocate ram for child process\n");
+                    return;
+                }
+                resp->ret_bytes = ROUND_UP(msg.words[1], BASE_PAGE_SIZE);
+
+                grading_rpc_handler_ram_cap(resp->ret_bytes, msg.words[2]);
+            }
+
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), 
+                                         MKCLOSURE(send_ram_cap_resp_handler, (void*) resp));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
+            
             break;
 
         case SPAWN_CMDLINE:
@@ -258,13 +323,35 @@ void send_pid_handler(void *arg) {
     printf("ack sent\n");
 }
 
-struct bootinfo *bi;
+void send_ram_cap_resp_handler(void *arg) 
+{
+    printf("sending ram cap response\n");
+    struct aos_rpc_ram_cap_resp_payload* resp = arg;
+    struct lmp_chan *chan = resp->rpc->lmp_chan;
 
+    debug_print_capref(resp->ret_cap);
+    printf("%d\n", resp->ret_bytes);
+    errval_t err = lmp_chan_send2(chan, 0, resp->ret_cap, GET_RAM_CAP, resp->ret_bytes);
+    while (err_is_fail(err)) {
+        printf("\n\n\n\n went into our error while loop\n\n\n\n");
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "failed sending ack\n");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "registering send handler\n");
+        //     return;
+        // }
+        // err = lmp_chan_send1(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 0);
+    }
+
+    printf("ram cap resp sent\n");
+}
+
+struct bootinfo *bi;
 coreid_t my_core_id;
 struct platform_info platform_info;
-
-
-
 
 static int
 bsp_main(int argc, char *argv[]) {

@@ -26,7 +26,7 @@ void setup_send_handler(void *arg)
 
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(ack_recv_handler, arg));
     // printf("sending msg (not ack)\n");
-    err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, 1);
+    err = lmp_chan_send1(rpc->lmp_chan, 0, rpc->lmp_chan->local_cap, SETUP_MSG);
     if (err_is_fail(err)) {
         printf("\n\n\nthis code actually runs!\n\n\n\n");
         // if (!lmp_err_is_transient(err)) {
@@ -104,7 +104,36 @@ void char_recv_handler(void *arg) {
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
 }
 
+void recv_ram_cap_resp_handler(void *arg) {
+    printf("recv ram cap resp handler received message\n");
 
+    struct aos_rpc_ram_cap_req_payload *payload = (struct aos_rpc_ram_cap_req_payload *) arg;
+    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
+    struct aos_rpc *rpc = payload->rpc;
+    errval_t err;
+    
+    err = lmp_chan_recv(rpc->lmp_chan, &msg, &payload->ret_cap);
+    printf("received ram cap size: %d\n", msg.words[2]);
+    payload->ret_bytes = msg.words[2];
+    // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), 
+    //                             MKCLOSURE(recv_ram_cap_resp_handler, arg));
+        
+    while (err_is_fail(err)) {
+        printf("\n\n\n\nthis actually ran (ram cap recv handler)\n\n\n\n\n");
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "registering receive handler\n");
+        //     return;
+        // }
+        // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "registering receive handler\n");
+        //     return;
+        // }
+        // err = lmp_chan_recv(rpc->lmp_chan, &msg, &NULL_CAP);
+    }
+
+    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+}
 
 
 /*
@@ -140,7 +169,7 @@ static void send_num_handler(void *arg)
     uintptr_t num = payload->val;
 
 
-    err = lmp_chan_send2(lc, 0, NULL_CAP, 2, num);
+    err = lmp_chan_send2(lc, 0, NULL_CAP, NUM_MSG, num);
     while (err_is_fail(err)) {
         printf("\n\n\nlooks like the useless code wasn't useless after all.\n\n\n");
         // if (!lmp_err_is_transient(err)) {
@@ -175,7 +204,7 @@ static void send_string_handler(void *arg)
 
 
     err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
-    err = lmp_chan_send2(lc, 0, frame, 3, len);
+    err = lmp_chan_send2(lc, 0, frame, STRING_MSG, len);
     while (err_is_fail(err)) {
         printf("\n\n\nThis code is seriously running?!\n\n\n\n");
         // printf("%s\n", err_getstring(err));
@@ -224,7 +253,7 @@ static void send_putchar_handler(void *arg) {
 
     err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *) rpc));
 
-    err = lmp_chan_send2(lc, 0, NULL_CAP, 4, c);
+    err = lmp_chan_send2(lc, 0, NULL_CAP, PUTCHAR, c);
     while (err_is_fail(err)) {
         printf("\n\n\nlooks like the useless code wasn't useless after all.\n\n\n");
         // if (!lmp_err_is_transient(err)) {
@@ -274,6 +303,38 @@ static void send_cmdline_handler(void* arg) {
 
     printf("cmdline sent!\n");
 }
+
+static void send_ram_cap_req_handler(void* arg) {
+    printf("got into send ram cap req handler\n");
+    
+    errval_t err;
+
+    struct aos_rpc_ram_cap_req_payload *payload = (struct aos_rpc_ram_cap_req_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct lmp_chan *lc = rpc->lmp_chan;
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), 
+                                 MKCLOSURE(recv_ram_cap_resp_handler, arg));
+    err = lmp_chan_send3(lc, 0, NULL_CAP, GET_RAM_CAP, payload->bytes, payload->alignment);
+    while (err_is_fail(err)) {
+        printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    printf("ram cap request sent!\n");
+}
+
 /**
  * @brief Send a single number over an RPC channel.
  *
@@ -387,16 +448,37 @@ errval_t aos_rpc_send_string(struct aos_rpc *rpc, const char *string)
 errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment,
                              struct capref *ret_cap, size_t *ret_bytes)
 {
-    // make compiler happy about unused parameters
-    (void)rpc;
-    (void)bytes;
-    (void)alignment;
-    (void)ret_cap;
-    (void)ret_bytes;
+    printf("made it in to download ram api\n");
+    printf("here is the size we are trying to request: %d\n", bytes);
 
-    // TODO: implement functionality to request a RAM capability over the
-    // given channel and wait until it is delivered.
-    // Hint: think about where the received cap will be stored
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+    
+    // marshall args into num payload
+    struct aos_rpc_ram_cap_req_payload *payload = malloc(sizeof(struct aos_rpc_ram_cap_req_payload));
+    payload->rpc = rpc;
+    payload->bytes = bytes;
+    payload->alignment = alignment;
+
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_ram_cap_req_handler, 
+                                 (void *) payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    
+    printf("made it to the end of ram cap request sending\n");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    printf("received ram cap and size (%d bytes)\n", payload->ret_bytes);
+    debug_print_capref(payload->ret_cap);
+
+    if (capref_is_null(payload->ret_cap)) {
+        printf("downloading ram failed\n");
+        return LIB_ERR_RAM_ALLOC;
+    }
+
+    *ret_cap = payload->ret_cap;
+    *ret_bytes = payload->ret_bytes;
+
     return SYS_ERR_OK;
 }
 

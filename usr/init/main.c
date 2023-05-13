@@ -147,9 +147,9 @@ void gen_recv_handler(void *arg)
             grading_rpc_handler_serial_getchar();
 
             // send response message
-            err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, GETCHAR, c);
+            err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, GETCHAR_ACK, c);
             while (lmp_err_is_transient(err)) {
-                err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, GETCHAR, c);
+                err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, GETCHAR_ACK, c);
             }
 
             if (err_is_fail(err)) {
@@ -168,22 +168,32 @@ void gen_recv_handler(void *arg)
             while (err_is_fail(err)) {
                 printf("not useless\n");
             }
-            struct aos_rpc_cmdline_payload *payload = malloc(sizeof(struct aos_rpc_cmdline_payload));
             
-            printf("here is the length we recieved: %d\n", msg.words[1]);
+            printf("here is the length we received: %d\n", msg.words[1]);
             void *buf2;
             err = paging_map_frame_attr(get_current_paging_state(), &buf2, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
 
-            printf("here is the string we recieved: %s\n", buf2);
+            printf("here is the string we received: %s\n", buf2);
+
             domainid_t our_pid;
             err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
             if (err_is_fail(err)) {
                 printf("spawn failed\n");
                 return;
             }
-            payload->pid = our_pid;
-            payload->rpc = rpc;
-            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_pid_handler, (void*) payload));
+            grading_rpc_handler_process_spawn(buf2, msg.words[2]);
+
+            err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, PID_ACK, our_pid);
+            while (lmp_err_is_transient(err)) {
+                err = lmp_chan_send2(rpc->lmp_chan, 0, NULL_CAP, PID_ACK, our_pid);
+            }
+
+            if (err_is_fail(err)) {
+                USER_PANIC_ERR(err, "failed sending pid\n");
+            }
+
+            printf("successfully sent ack back from spawn cmdline\n");
+
             break;
         default:
             // i don't know
@@ -201,74 +211,17 @@ void gen_recv_handler(void *arg)
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
     printf("reregistered receive handler\n");
     if (err_is_fail(err)) {
-        DEBUG_ERR(err, "reregistering receive handler\n");
-        return;
+        USER_PANIC_ERR(err, "reregistering receive handler\n");
     }
 
     event_dispatch(get_default_waitset());
 }
 
-void send_ack_handler(void *arg)
-{
-    printf("sending ack\n");
-    struct aos_rpc *rpc = arg;
-    struct lmp_chan *chan = rpc->lmp_chan;
-    errval_t err;
-    err = lmp_chan_send1(chan, 0, NULL_CAP, 0);
-    while (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
-    }
-
-    printf("ack sent\n");
-}
-
-void send_char_handler(void *arg)
-{
-    printf("sending char\n");
-    struct aos_rpc_num_payload *payload = arg;
-    struct aos_rpc *rpc = payload->rpc;
-    struct lmp_chan *chan = rpc->lmp_chan;
-    char c = payload->val;
-    errval_t err;
-    err = lmp_chan_send2(chan, 0, NULL_CAP, GETCHAR, c);
-    if (err_is_fail(err)) {
-        USER_PANIC_ERR(err, "failed sending char\n");
-    }
-
-    printf("char sent\n");
-}
-
-void send_pid_handler(void *arg) {
-    printf("sending our pid\n");
-    struct aos_rpc_cmdline_payload *payload = arg;
-    struct aos_rpc *rpc = payload->rpc;
-    struct lmp_chan *chan = rpc->lmp_chan;
-    errval_t err;
-    err = lmp_chan_send2(chan, 0, NULL_CAP, PID_ACK, payload->pid);
-    while (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
-        // if (!lmp_err_is_transient(err)) {
-        //     DEBUG_ERR(err, "failed sending ack\n");
-        //     return;
-        // }
-        // err = lmp_chan_register_send(chan, get_default_waitset(), MKCLOSURE(send_ack_handler, arg));
-        // if (err_is_fail(err)) {
-        //     DEBUG_ERR(err, "registering send handler\n");
-        //     return;
-        // }
-        // err = lmp_chan_send1(chan, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 0);
-    }
-
-    printf("ack sent\n");
-}
 
 struct bootinfo *bi;
 
 coreid_t my_core_id;
 struct platform_info platform_info;
-
-
-
 
 static int
 bsp_main(int argc, char *argv[]) {

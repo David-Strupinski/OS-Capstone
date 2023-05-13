@@ -36,6 +36,7 @@ enum msg_type {
     GET_RAM_CAP,
     SPAWN_CMDLINE,
     PID_ACK,
+    GETCHAR_ACK,
 };
 
 
@@ -83,26 +84,14 @@ void recv_ack(struct lmp_chan *lc);
 // global recv getchar ack
 void recv_getchar_ack(struct lmp_chan *lc, char *retchar);
 
+// global recv pid ack
+void recv_pid_ack(struct lmp_chan *lc, domainid_t *pid);
+
 // global send acknowledgement handler
 void send_ack_handler(void *arg);
 
-// global send ack with a pid handler
-void send_pid_handler(void *arg);
-
-// global send char handler (getchar)
-void send_char_handler(void *arg);
-
 // global receive handler
 void gen_recv_handler(void *arg);
-
-// global ack handler (for processes)
-void ack_recv_handler(void *arg);
-
-// for serial
-void char_recv_handler(void *arg);
-
-// child process setup message send handler
-void setup_send_handler(void *arg);
 
 // general handler for recieving an ack with a pid in it.
 void pid_recv_handler(void* arg);

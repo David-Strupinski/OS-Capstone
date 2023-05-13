@@ -20,6 +20,7 @@ domainid_t global_pid;
 
 void setup_send_handler(void *arg)
 {
+    printf("sending setup message\n");
     struct aos_rpc *rpc = arg;
     errval_t err;
 
@@ -138,7 +139,6 @@ static void send_num_handler(void *arg)
     struct lmp_chan *lc = rpc->lmp_chan;
     uintptr_t num = payload->val;
 
-    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *) rpc));
 
     err = lmp_chan_send2(lc, 0, NULL_CAP, 2, num);
     while (err_is_fail(err)) {

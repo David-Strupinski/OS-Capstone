@@ -26,7 +26,7 @@ void recv_ack(void *arg)
 
     err = lmp_chan_recv(lc, &msg, NULL);
     while (lmp_err_is_transient(err)) {
-        printf("in recv ack, got transient error\n");
+        debug_printf("in recv ack, got transient error\n");
         err = lmp_chan_recv(lc, &msg, NULL);
     }
     
@@ -35,10 +35,10 @@ void recv_ack(void *arg)
     }
 
     if (msg.words[0] != 0) {
-        printf("\n\n\nreceived something other than an ack\n\n\n");
+        debug_printf("\n\n\nreceived something other than an ack\n\n\n");
         abort();
     }
-    printf("received ack!\n\n\n\n");
+    // debug_printf("received ack!\n\n\n\n");
 }
 
 
@@ -56,7 +56,7 @@ void recv_getchar_ack(void *arg)
         err = lmp_chan_recv(lc, &msg, NULL);
     }
     if (msg.words[0] != GETCHAR_ACK) {
-        printf("\n\n\nreceived something other than an ack\n\n\n");
+        debug_printf("\n\n\nreceived something other than an ack\n\n\n");
         abort();
     }
     *retchar = msg.words[1];
@@ -65,7 +65,7 @@ void recv_getchar_ack(void *arg)
 
 void recv_pid_ack(void *arg)
 {
-    printf("in recv pid ack\n");
+    debug_printf("in recv pid ack\n");
     errval_t err;
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
 
@@ -78,7 +78,7 @@ void recv_pid_ack(void *arg)
         err = lmp_chan_recv(lc, &msg, NULL);
     }
     if (msg.words[0] != PID_ACK) {
-        printf("\n\n\nreceived something other than an ack: %d\n\n\n", msg.words[0]);
+        debug_printf("\n\n\nreceived something other than an ack: %d\n\n\n", msg.words[0]);
         abort();
     }
     *pid = msg.words[1];
@@ -129,7 +129,7 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
-    printf("send num: local cap:\n");
+    debug_printf("send num: local cap:\n");
     debug_print_cap_at_capref(lc->local_cap);
     err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, rpc->lmp_chan->local_cap, NUM_MSG, num);
     while (lmp_err_is_transient(err)) {
@@ -142,7 +142,7 @@ errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
     // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_ack, lc));
     recv_ack(lc);
 
-    printf("made it to the end of number sending\n");
+    debug_printf("made it to the end of number sending\n");
 
     return SYS_ERR_OK;
 }
@@ -182,19 +182,19 @@ errval_t aos_rpc_send_string(struct aos_rpc *rpc, const char *string)
     err = lmp_chan_alloc_recv_slot(lc);
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
 
-    // printf("in aos rpc, sending string\n");
+    debug_printf("in aos rpc, sending string\n");
     err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, STRING_MSG, len);
     while (lmp_err_is_transient(err)) {
         err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, STRING_MSG, len);
     }
     DEBUG_ERR_ON_FAIL(err, "sending string\n");
 
-    // printf("sent string! waiting for ack\n");
+    debug_printf("sent string! waiting for ack\n");
 
     // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_ack, lc));
     recv_ack(lc);
 
-    printf("send string complete!\n");
+    debug_printf("send string complete!\n");
 
     return SYS_ERR_OK;
 }
@@ -258,7 +258,7 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
     // make compiler happy about unused parameters
     (void)rpc;
     (void)retc;
-    printf("sending getchar\n");
+    debug_printf("sending getchar\n");
 
     // TODO implement functionality to request a character from
     // the serial driver.
@@ -282,7 +282,7 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
     err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_getchar_ack, &payload));
     recv_getchar_ack(&payload);
 
-    printf("send getchar complete! Got char %c\n", retchar);
+    debug_printf("send getchar complete! Got char %c\n", retchar);
 
     *retc = retchar;
 
@@ -322,7 +322,7 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
     // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_ack, lc));
     recv_ack(lc);
 
-    printf("send char complete!\n");
+    // debug_printf("send char complete!\n");
 
     return SYS_ERR_OK;
 }
@@ -392,7 +392,7 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     errval_t err;
     
     // printf("entered api for spawn cmdline\n");
-    printf("here's the cmdline: %s\n", cmdline);
+    debug_printf("here's the cmdline: %s\n", cmdline);
     struct lmp_chan *lc = rpc->lmp_chan;
 
     // allocate and map a frame, copying to it the string contents
@@ -406,20 +406,20 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     strcpy(buf, cmdline);
 
     // pass the string frame and length in the payload
-    printf("here is the initial value of pid: %d\n", global_pid);
+    debug_printf("here is the initial value of pid: %d\n", global_pid);
 
     // send the frame and the length on the channel
     err = lmp_chan_alloc_recv_slot(lc);
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
     
-    printf("sending spawn with cmdline\n");
+    debug_printf("sending spawn with cmdline\n");
     err = lmp_chan_send3(lc, LMP_SEND_FLAGS_DEFAULT, frame, SPAWN_CMDLINE, len, core);
     while (lmp_err_is_transient(err)) {
         err = lmp_chan_send3(lc, LMP_SEND_FLAGS_DEFAULT, frame, SPAWN_CMDLINE, len, core);
     }
     DEBUG_ERR_ON_FAIL(err, "send spawn with cmdline\n");
 
-    printf("sent spawn with cmdline! waiting for ack\n");
+    debug_printf("sent spawn with cmdline! waiting for ack\n");
 
     // wait for pid ack
     struct aos_rpc_cmdline_payload payload = {
@@ -430,7 +430,7 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     // err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(recv_pid_ack, &payload));
     recv_pid_ack(&payload);
     
-    printf("here is the pid we received: %d\n", global_pid);
+    debug_printf("here is the pid we received: %d\n", global_pid);
 
     return SYS_ERR_OK;
 }
@@ -696,7 +696,7 @@ struct aos_rpc *aos_rpc_get_init_channel(void)
 
     struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));
     if (rpc == NULL) {
-        printf("aos_rpc_get_init_channel: malloc failed\n");
+        debug_printf("aos_rpc_get_init_channel: malloc failed\n");
         return NULL;
     }
     aos_rpc_init(rpc);

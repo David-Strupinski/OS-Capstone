@@ -41,24 +41,24 @@ void send_ack(struct lmp_chan *lc)
         abort();
     }
 
-    printf("send_ack: sending to remote cap:\n");
-    debug_print_cap_at_capref(lc->remote_cap);
+    // debug_printf("send_ack: sending to remote cap:\n");
+    // debug_print_cap_at_capref(lc->remote_cap);
     err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, ACK_MSG);
     while (lmp_err_is_transient(err)) {
         DEBUG_ERR(err, "sending ack\n");
-        abort();
+        // abort();
         err = lmp_chan_send1(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, ACK_MSG);
     }
 
     if (err_is_fail(err)) {
-        printf("\n\n\n\n went into our error while loop\n\n\n\n");
+        debug_printf("\n\n\n\n went into our error while loop\n\n\n\n");
         abort();
     }
 }
 
 void gen_recv_handler(void *arg)
 {
-    printf("received message\n");
+    // debug_printf("received message\n");
 
     struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
     struct aos_rpc *rpc = arg;
@@ -71,7 +71,7 @@ void gen_recv_handler(void *arg)
     switch(msg.words[0]) {
         case ACK_MSG:
             // is ack
-            printf("why is init receiving acks!?!?\n");
+            debug_printf("why is init receiving acks!?!?\n");
             abort();
             break;
 
@@ -84,14 +84,14 @@ void gen_recv_handler(void *arg)
             // init_rpc.lmp_chan = rpc->lmp_chan;
 
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
             }
 
             // printf("sending ack from setup\n");
 
             send_ack(rpc->lmp_chan);
 
-            printf("successfully sent ack back from setup\n");
+            // debug_printf("successfully sent ack back from setup\n");
 
             break;
 
@@ -100,16 +100,15 @@ void gen_recv_handler(void *arg)
             rpc->lmp_chan->remote_cap = remote_cap;
 
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
             }
             grading_rpc_handle_number(msg.words[1]);
 
-            // printf("sending ack from num\n");
+            debug_printf("sending ack from num\n");
 
             send_ack(rpc->lmp_chan);
-            debug_print_cap_at_capref(rpc->lmp_chan->remote_cap);
 
-            printf("successfully sent ack back from num\n");
+            debug_printf("successfully sent ack back from num\n");
 
             break;
             
@@ -117,9 +116,9 @@ void gen_recv_handler(void *arg)
             // is string
             // rpc->lmp_chan->remote_cap = remote_cap;
 
-            // printf("is string\n");
+            debug_printf("is string\n");
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
             }
 
             void *buf;
@@ -133,7 +132,7 @@ void gen_recv_handler(void *arg)
 
             send_ack(rpc->lmp_chan);
 
-            printf("successfully sent ack back from string\n");
+            debug_printf("successfully sent ack back from string\n");
 
             break;
 
@@ -141,17 +140,19 @@ void gen_recv_handler(void *arg)
             // putchar
             rpc->lmp_chan->remote_cap = remote_cap;
 
-            printf("recieved putchar message\n");
+            // debug_printf("recieved putchar message\n");
             while (err_is_fail(err)) {
-                printf("\n\n\nlooks like the code ran\n\n\n");
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
             }
 
-            putchar(msg.words[1]);
-            grading_rpc_handler_serial_putchar(msg.words[1]);
+            // debug_printf("%c", msg.words[1]);
+            sys_print((char *) &msg.words[1], 1);
+            // grading_rpc_handler_serial_putchar(msg.words[1]);
 
+            // debug_printf("sending ack from putchar\n");
             send_ack(rpc->lmp_chan);
 
-            printf("successfully sent ack back from putchar\n");
+            // debug_printf("successfully sent ack back from putchar\n");
 
             break;
 
@@ -159,7 +160,7 @@ void gen_recv_handler(void *arg)
             // getchar
             rpc->lmp_chan->remote_cap = remote_cap;
 
-            printf("recieved getchar message\n");
+            debug_printf("recieved getchar message\n");
             while (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "registering receive handler\n");
             }
@@ -176,7 +177,7 @@ void gen_recv_handler(void *arg)
                 USER_PANIC_ERR(err, "failed sending char\n");
             }
 
-            printf("successfully sent ack back from getchar\n");
+            debug_printf("successfully sent ack back from getchar\n");
 
             break;
 
@@ -185,23 +186,23 @@ void gen_recv_handler(void *arg)
             break;
 
         case SPAWN_CMDLINE:
-            printf("recieved spawn cmdline message\n");
+            debug_printf("recieved spawn cmdline message\n");
             // rpc->lmp_chan->remote_cap = remote_cap;
 
             while (err_is_fail(err)) {
-                printf("not useless\n");
+                debug_printf("not useless\n");
             }
             
-            printf("here is the length we received: %d\n", msg.words[1]);
+            debug_printf("here is the length we received: %d\n", msg.words[1]);
             void *buf2;
             err = paging_map_frame_attr(get_current_paging_state(), &buf2, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
 
-            printf("here is the string we received: %s\n", buf2);
+            debug_printf("here is the string we received: %s\n", buf2);
 
             domainid_t our_pid = 0;
             err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
             if (err_is_fail(err)) {
-                printf("spawn failed\n");
+                debug_printf("spawn failed\n");
                 return;
             }
             grading_rpc_handler_process_spawn(buf2, msg.words[2]);
@@ -215,12 +216,12 @@ void gen_recv_handler(void *arg)
                 USER_PANIC_ERR(err, "failed sending pid\n");
             }
 
-            printf("successfully sent ack back from spawn cmdline\n");
+            debug_printf("successfully sent ack back from spawn cmdline\n");
 
             break;
         default:
             // i don't know
-            printf("uh oh I have no idea what this is\n");
+            debug_printf("uh oh I have no idea what this is\n");
     }
 
     // allocate a new slot
@@ -232,7 +233,7 @@ void gen_recv_handler(void *arg)
 
     // reregister receive handler
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
-    printf("reregistered receive handler\n");
+    // debug_printf("reregistered receive handler\n");
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "reregistering receive handler\n");
     }
@@ -292,7 +293,7 @@ bsp_main(int argc, char *argv[]) {
             return LIB_ERR_NOT_IMPLEMENTED;
     }
     if (err_is_fail(err)) {
-        DEBUG_ERR(err, "Booting second core failed. Continuing.\n");
+        // DEBUG_ERR(err, "Booting second core failed. Continuing.\n");
     }
 
     // TODO: Spawn system processes, boot second core etc. here

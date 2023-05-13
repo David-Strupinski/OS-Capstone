@@ -66,42 +66,62 @@ static void libc_assert(const char *expression, const char *file,
     sys_print(buf, len < sizeof(buf) ? len : sizeof(buf));
 }
 
+// __attribute__((__used__))
+// static size_t syscall_terminal_write(const char *buf, size_t len)
+// {
+//     if(len) {
+//         errval_t err = sys_print(buf, len);
+//         if (err_is_fail(err)) {
+//             return 0;
+//         }
+//     }
+//     return len;
+// }
+
+// __attribute__((__used__))
+// static size_t dummy_terminal_read(char *buf, size_t len)
+// {
+//     (void)buf;
+//     (void)len;
+//     debug_printf("Terminal read NYI!\n");
+//     return 0;
+// }
+
 __attribute__((__used__))
-static size_t syscall_terminal_write(const char *buf, size_t len)
+static size_t aos_terminal_write(const char *buf, size_t len)
 {
-    if(len) {
-        errval_t err = sys_print(buf, len);
+    size_t i = 0;
+    errval_t err;
+    struct aos_rpc *rpc = aos_rpc_get_serial_channel();
+
+    while (i < len) {
+        err = aos_rpc_serial_putchar(rpc, buf[i]);
         if (err_is_fail(err)) {
-            return 0;
+            return i;
         }
+        i++;
     }
+
     return len;
 }
 
 __attribute__((__used__))
-static size_t dummy_terminal_read(char *buf, size_t len)
+static size_t aos_terminal_read(char *buf, size_t len)
 {
-    (void)buf;
-    (void)len;
-    debug_printf("Terminal read NYI!\n");
-    return 0;
+    errval_t err;
+    struct aos_rpc *rpc = aos_rpc_get_serial_channel();
+    size_t i = 0;
+
+    while (i < len) {
+        err = aos_rpc_serial_getchar(rpc, &buf[i]);
+        if (err_is_fail(err)) {
+            return i;
+        }
+        i++;
+    }
+
+    return len;
 }
-
-// static size_t aos_terminal_write(const char *buf, size_t len)
-// {
-//     if(len) {
-        
-//     }
-//     return len;
-// }
-
-// static size_t aos_terminal_read(const char *buf, size_t len)
-// {
-//     if(len) {
-        
-//     }
-//     return len;
-// }
 
 
 /* Set libc function pointers */
@@ -111,8 +131,8 @@ void barrelfish_libc_glue_init(void)
     // what we need for that
     // TODO: change these to use the user-space serial driver if possible
     // TODO: set these functions
-    _libc_terminal_read_func = dummy_terminal_read;
-    _libc_terminal_write_func = syscall_terminal_write;
+    _libc_terminal_read_func = aos_terminal_read;
+    _libc_terminal_write_func = aos_terminal_write;
     _libc_exit_func = libc_exit;
     _libc_assert_func = libc_assert;
     /* morecore func is setup by morecore_init() */
@@ -198,7 +218,7 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
     err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(recv_ack, rpc->lmp_chan));
     // recv_ack(rpc->lmp_chan);
 
-    printf("init acknowledged receiving the endpoint!\n");
+    debug_printf("init acknowledged receiving the endpoint!\n");
     debug_print_cap_at_capref(rpc->lmp_chan->local_cap);
 
     /* set init RPC client in our program state */

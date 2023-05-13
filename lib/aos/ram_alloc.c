@@ -19,7 +19,7 @@
 /* remote (indirect through a channel) version of ram_alloc, for most domains */
 static errval_t ram_alloc_remote(struct capref *ret, size_t size, size_t alignment)
 {
-    printf("getting more ram\n");
+    debug_printf("getting more ram\n");
     errval_t err;
 
     // checks are done in the calling function

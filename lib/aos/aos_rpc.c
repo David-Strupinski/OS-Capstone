@@ -357,7 +357,7 @@ static void send_get_all_pids_handler(void* arg) {
 }
 
 static void send_get_pid_handler(void *arg) {
-    debug_printf("got into send get pid handler\n");
+    // debug_printf("got into send get pid handler\n");
     
     errval_t err;
 

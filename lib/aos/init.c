@@ -47,7 +47,7 @@ __weak_reference(libc_exit, _exit);
 void libc_exit(int status)
 {
     aos_rpc_proc_exit(aos_rpc_get_process_channel(), status);
-    debug_printf("exit NYI\n");
+    // debug_printf("exit NYI\n");
 
     thread_exit(status);
 

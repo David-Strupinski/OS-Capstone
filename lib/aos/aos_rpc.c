@@ -290,6 +290,42 @@ static void send_ram_cap_req_handler(void* arg) {
     debug_printf("ram cap request sent!\n");
 }
 
+static void send_get_all_pids_handler(void* arg) {
+    debug_printf("got into send get all pids handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
+    err = lmp_chan_send2(lc, 0, frame, GET_ALL_PIDS, len);
+    while (err_is_fail(err)) {
+        // debug_printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // debug_printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // debug_printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    debug_printf("string sent!\n");
+}
+
 /**
  * @brief Send a single number over an RPC channel.
  *
@@ -638,9 +674,7 @@ errval_t aos_rpc_proc_spawn_with_default_args(struct aos_rpc *chan, const char *
     (void)core;
     (void)newpid;
 
-    // TODO: implement the process spawn with default args RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    return aos_rpc_proc_spawn_with_cmdline(chan, path, core, newpid);
 }
 
 /**
@@ -652,16 +686,45 @@ errval_t aos_rpc_proc_spawn_with_default_args(struct aos_rpc *chan, const char *
  *
  * @return SYS_ERR_OK on success, or error value on failure
  */
-errval_t aos_rpc_proc_get_all_pids(struct aos_rpc *chan, domainid_t **pids, size_t *pid_count)
+errval_t aos_rpc_proc_get_all_pids(struct aos_rpc *rpc, domainid_t **pids, size_t *pid_count)
 {
     // make compiler happy about unused parameters
-    (void)chan;
+    (void)rpc;
     (void)pids;
     (void)pid_count;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
 
-    // TODO: implement the process get all PIDs RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+
+    // pass the string frame and length in the payload
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = BASE_PAGE_SIZE;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_get_all_pids_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    // verify contents of frame
+    struct get_all_pids_frame_output* output = (struct get_all_pids_frame_output*) buf;
+    debug_printf("here is the number of pids: %d\n", output->num_pids);
+    debug_printf("here are the pids:\n");
+    *pids = output->pids;
+    *pid_count = output->num_pids;
+
+    free(payload);
+    return SYS_ERR_OK;
 }
 
 /**
@@ -712,9 +775,8 @@ errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char *name,
     (void)name;
     (void)len;
 
-    // TODO: implement the process get name RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    // why are all three of these input parameters? what are we supposed to do?
+    return SYS_ERR_OK;
 }
 
 

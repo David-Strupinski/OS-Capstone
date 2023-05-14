@@ -182,8 +182,9 @@ static void test_spawn_rpc(void)
         grading_test_fail("R1-4", "no proc_rpc channel set!\n");
         return;
     }
-
+    
     err = aos_rpc_proc_spawn_with_cmdline(proc_rpc, CMDLINE, core, &pid);
+    // err = aos_rpc_proc_spawn_with_default_args(proc_rpc, "hello", core, &pid);
     if (err_is_fail(err)) {
         grading_test_fail("R1-4", "failed to load: %s\n", err_getstring(err));
         return;
@@ -199,9 +200,9 @@ static void test_spawn_rpc(void)
     grading_printf("number of pids: %d\n", pid_count);
     grading_printf("printing all pids: \n");
     for (size_t i = 0; i < pid_count - 1; i++)  {
-        printf("%d, ", pid_array[i]);
+        grading_printf("%d,\n", pid_array[i]);
     }
-    printf("%d\n", pid_array[pid_count - 1]);
+    grading_printf("%d\n", pid_array[pid_count - 1]);
     grading_test_pass("R1-4", "test_spawn_rpc\n");
 }
 

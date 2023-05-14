@@ -263,6 +263,36 @@ void gen_recv_handler(void *arg)
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_pid_handler, (void*) payload));
             grading_rpc_handler_process_spawn(buf2, msg.words[2]);
             break;
+        case GET_ALL_PIDS:
+            debug_printf("is get_all_pids message\n");
+            while (err_is_fail(err)) {
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
+                // if (!lmp_err_is_transient(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+                // if (err_is_fail(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+            }
+
+            void *buf10;
+            err = paging_map_frame_attr(get_current_paging_state(), &buf10, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
+            struct get_all_pids_frame_output * output = (struct get_all_pids_frame_output*) buf10;
+            domainid_t * intermediate_pids;
+            proc_mgmt_get_proc_list(&intermediate_pids, &output->num_pids);
+            for (size_t i = 0; i < output->num_pids; i++) {
+                output->pids[i] = intermediate_pids[i];
+            }
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
+            break;
         default:
             // i don't know
             debug_printf("received unknown message type\n");
@@ -280,7 +310,7 @@ void send_ack_handler(void *arg)
     struct aos_rpc *rpc = arg;
     struct lmp_chan *chan = rpc->lmp_chan;
     errval_t err;
-    err = lmp_chan_send1(chan, 0, NULL_CAP, 0);
+    err = lmp_chan_send1(chan, 0, NULL_CAP, ACK_MSG);
     while (err_is_fail(err)) {
         debug_printf("\n\n\n\n went into our error while loop\n\n\n\n");
     }

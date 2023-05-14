@@ -618,6 +618,9 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
 
     err = lmp_chan_register_recv(rpc->lmp_chan, ws, MKCLOSURE(handler, (void *) rpc));
+    if (err_is_fail(err)) {
+        debug_printf("error: %s\n", err_getstring(err));
+    }
     DEBUG_ERR_ON_FAIL(err, "registering receive slot for lmp channel\n");
 
     return SYS_ERR_OK;

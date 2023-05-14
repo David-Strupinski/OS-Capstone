@@ -66,17 +66,17 @@ static void libc_assert(const char *expression, const char *file,
     sys_print(buf, len < sizeof(buf) ? len : sizeof(buf));
 }
 
-__attribute__((__used__))
-static size_t syscall_terminal_write(const char *buf, size_t len)
-{
-    if(len) {
-        errval_t err = sys_print(buf, len);
-        if (err_is_fail(err)) {
-            return 0;
-        }
-    }
-    return len;
-}
+// __attribute__((__used__))
+// static size_t syscall_terminal_write(const char *buf, size_t len)
+// {
+//     if(len) {
+//         errval_t err = sys_print(buf, len);
+//         if (err_is_fail(err)) {
+//             return 0;
+//         }
+//     }
+//     return len;
+// }
 
 __attribute__((__used__))
 static size_t dummy_terminal_read(char *buf, size_t len)
@@ -87,6 +87,23 @@ static size_t dummy_terminal_read(char *buf, size_t len)
     return 0;
 }
 
+__attribute__((__used__))
+static size_t aos_terminal_write(const char *buf, size_t len)
+{
+    errval_t err;
+    size_t i = 0;
+    (void)buf;
+
+    while (i < len) {
+        err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), buf[i]);
+        if (err_is_fail(err)) {
+            return i;
+        }
+        i++;
+    }
+    debug_printf("len: %d\n", i);
+    return len;
+}
 
 /* Set libc function pointers */
 void barrelfish_libc_glue_init(void)
@@ -96,7 +113,7 @@ void barrelfish_libc_glue_init(void)
     // TODO: change these to use the user-space serial driver if possible
     // TODO: set these functions
     _libc_terminal_read_func = dummy_terminal_read;
-    _libc_terminal_write_func = syscall_terminal_write;
+    _libc_terminal_write_func = aos_terminal_write;
     _libc_exit_func = libc_exit;
     _libc_assert_func = libc_assert;
     /* morecore func is setup by morecore_init() */
@@ -160,16 +177,12 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
 
     // MILESTONE 3: register ourselves with init
 
-    /* allocate lmp channel structure */
     /* initialize init RPC client with lmp channel */
     struct aos_rpc *rpc = aos_rpc_get_init_channel();
+
     /* set receive handler */
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
     DEBUG_ERR_ON_FAIL(err, "allocating receive slot for lmp channel\n");
-
-    /* wait for init to acknowledge receiving the endpoint */
-    // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, (void *) rpc));
-    // DEBUG_ERR_ON_FAIL(err, "couldn't register recv in child\n");
 
     /* send local ep to init */
     err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(setup_send_handler, (void *) rpc));
@@ -180,9 +193,6 @@ errval_t barrelfish_init_onthread(struct spawn_domain_params *params)
 
     /* set init RPC client in our program state */
     set_init_rpc(rpc);
-
-    /* TODO MILESTONE 3: now we should have a channel with init set up and can
-     * use it for the ram allocator */
 
     // right now we don't have the nameservice & don't need the terminal
     // and domain spanning, so we return here

@@ -40,6 +40,7 @@ enum msg_type {
     PID_ACK,
     RAM_CAP_ACK,
     GET_ALL_PIDS,
+    GET_PID,
 };
 
 
@@ -93,6 +94,10 @@ struct aos_rpc_ram_cap_resp_payload {
 struct get_all_pids_frame_output {
     size_t      num_pids;
     domainid_t  pids[128];
+};
+
+struct get_pid_frame_output {
+    domainid_t pid;
 };
 
 // global send acknowledgement handler

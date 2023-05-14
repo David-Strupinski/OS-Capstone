@@ -203,6 +203,13 @@ static void test_spawn_rpc(void)
         grading_printf("%d,\n", pid_array[i]);
     }
     grading_printf("%d\n", pid_array[pid_count - 1]);
+
+
+    grading_printf("testing get pid by name with input: \"hello\"\n");
+    domainid_t pid2;
+    aos_rpc_proc_get_pid(proc_rpc, "hello", &pid2);
+    grading_printf("recieved pid: %d\n", pid2);
+
     grading_test_pass("R1-4", "test_spawn_rpc\n");
 }
 

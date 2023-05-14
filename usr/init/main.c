@@ -293,6 +293,34 @@ void gen_recv_handler(void *arg)
                 return;
             }
             break;
+        case GET_PID:
+            debug_printf("is get_pid message\n");
+            while (err_is_fail(err)) {
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
+                // if (!lmp_err_is_transient(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+                // if (err_is_fail(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+            }
+
+            void *buf11;
+            err = paging_map_frame_attr(get_current_paging_state(), &buf11, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
+            struct get_pid_frame_output * output2 = (struct get_pid_frame_output*) buf11;
+            debug_printf("heres the string we recieved: %s\n", buf11);
+            proc_mgmt_get_pid_by_name(buf11, &output2->pid);
+            debug_printf("made it to the end of receiving\n");
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
+            break;
         default:
             // i don't know
             debug_printf("received unknown message type\n");

@@ -161,7 +161,8 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     //printf("%.4s\n", si->module_data);
 
-    si->binary_name = (char*)argv[0];
+    si->binary_name = malloc(strlen((char*)argv[0]) + 1);
+    strcpy(si->binary_name, (char*) argv[0]);
     
     // reconstruct si->cmdline from argv with spaces
     int cmdline_len = 0;

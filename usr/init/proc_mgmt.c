@@ -341,11 +341,19 @@ errval_t proc_mgmt_get_pid_by_name(const char *name, domainid_t *pid)
     // make compiler happy about unused parameters
     (void)name;
     (void)pid;
-
-    USER_PANIC("functionality not implemented\n");
-    // TODO:
-    //   - lookup the process with the given name in the process table
-    return LIB_ERR_NOT_IMPLEMENTED;
+    debug_printf("heres the string were looking for: %s\n", name);
+    struct spawninfo *curr = root;
+    while (curr != NULL) {
+        debug_printf("here's the current binary: %s\n", curr->binary_name);
+        if (strcmp(name, curr->binary_name) == 0) {
+            *pid = curr->pid;
+            debug_printf("found pid: %d\n", curr->pid);
+            return SYS_ERR_OK;
+        }
+        curr = curr->next;
+    }
+    *pid = -1;
+    return -1;
 }
 
 static proc_state_t get_proc_state_from_spawn_state(spawn_state_t state)
@@ -399,7 +407,7 @@ errval_t proc_mgmt_get_status(domainid_t pid, struct proc_status *status)
         }
         curr = curr->next;
     }
-    printf("done\n");
+    debug_printf("done\n");
 
     return SPAWN_ERR_WRONG_STATE;
 }

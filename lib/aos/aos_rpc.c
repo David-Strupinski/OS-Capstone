@@ -323,7 +323,43 @@ static void send_get_all_pids_handler(void* arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("string sent!\n");
+    debug_printf("get_all_pids request sent!\n");
+}
+
+static void send_get_pid_handler(void *arg) {
+    debug_printf("got into send get pid handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
+    err = lmp_chan_send2(lc, 0, frame, GET_PID, len);
+    while (err_is_fail(err)) {
+        // debug_printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // debug_printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // debug_printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    debug_printf("get pid request sent!\n");
 }
 
 /**
@@ -792,16 +828,43 @@ errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char *name,
  * Note: if there are multiple processes with the same name, the smallest PID should be
  * returned.
  */
-errval_t aos_rpc_proc_get_pid(struct aos_rpc *chan, const char *name, domainid_t *pid)
+errval_t aos_rpc_proc_get_pid(struct aos_rpc *rpc, const char *name, domainid_t *pid)
 {
     // make compiler happy about unused parameters
-    (void)chan;
+    (void)rpc;
     (void)name;
     (void)pid;
 
-    // TODO: implement the process get PID RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+    strcpy(buf, name);
+    // pass the string frame and length in the payload
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = BASE_PAGE_SIZE;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_get_pid_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    // verify contents of frame
+    struct get_pid_frame_output* output = (struct get_pid_frame_output*) buf;
+    *pid = output->pid;
+
+    free(payload);
+    return SYS_ERR_OK;
 }
 
 

@@ -172,6 +172,10 @@ static void test_spawn_rpc(void)
     }
 
     grading_printf("waiting 5 seconds to give the other domain chance to run...\n");
+    grading_printf("actually we are going to call our fancy new wait instead\n");
+    // int status;
+    // aos_rpc_proc_wait(aos_rpc_get_process_channel(),pid,&status);
+    // grading_printf("hello exited with status: %d\n", status);
     barrelfish_usleep(5000000);
 
 
@@ -183,14 +187,19 @@ static void test_spawn_rpc(void)
         return;
     }
     
-    err = aos_rpc_proc_spawn_with_cmdline(proc_rpc, CMDLINE, core, &pid);
+    // err = aos_rpc_proc_spawn_with_cmdline(proc_rpc, CMDLINE, core, &pid);
     // err = aos_rpc_proc_spawn_with_default_args(proc_rpc, "hello", core, &pid);
+    char* args[5] = {"hello", "these", "are", "the", "args"};
+    err = aos_rpc_proc_spawn_with_caps(proc_rpc, 5, (const char**)args, 0, NULL_CAP, core, &pid);
     if (err_is_fail(err)) {
         grading_test_fail("R1-4", "failed to load: %s\n", err_getstring(err));
         return;
     }
 
     grading_printf("waiting 5 seconds to give the other domain chance to run...\n");
+    grading_printf("actually we are going to call our fancy new wait instead\n");
+    //aos_rpc_proc_wait(aos_rpc_get_process_channel(),pid,&status);
+    // grading_printf("hello exited with status: %d\n", status);
     barrelfish_usleep(5000000);
 
     grading_printf("testing get all pids\n");

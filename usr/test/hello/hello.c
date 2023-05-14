@@ -57,10 +57,11 @@ int main(int argc, char *argv[])
         }
         printf("%s\n", (char *)buf);
     }
-
+    
+    return EXIT_SUCCESS;
     while(1) {
         thread_yield();
     }
 
-    return EXIT_SUCCESS;
+    //return EXIT_SUCCESS;
 }

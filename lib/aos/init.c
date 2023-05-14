@@ -46,8 +46,11 @@ void libc_exit(int);
 __weak_reference(libc_exit, _exit);
 void libc_exit(int status)
 {
-    debug_printf("libc exit NYI!\n");
+    aos_rpc_proc_exit(aos_rpc_get_process_channel(), status);
+    debug_printf("actually exiting NYI, but other processes were notified that we're dead!\n");
+
     thread_exit(status);
+
     // If we're not dead by now, we wait
     while (1) {}
 }

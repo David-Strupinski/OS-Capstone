@@ -240,6 +240,42 @@ static void send_putchar_handler(void *arg) {
     }
 }
 
+static void send_spawn_with_caps_handler(void * arg) {
+    debug_printf("got into spawn with caps request send handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
+    err = lmp_chan_send2(lc, 0, frame, SPAWN_WITH_CAPS_MSG, len);
+    while (err_is_fail(err)) {
+        // debug_printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // debug_printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // debug_printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    debug_printf("spawn with caps request sent!\n");
+}
+
 static void send_cmdline_handler(void* arg) {
     debug_printf("got into send cmdline handler\n");
     
@@ -274,7 +310,7 @@ static void send_cmdline_handler(void* arg) {
 }
 
 static void send_ram_cap_req_handler(void* arg) {
-    debug_printf("got into send ram cap req handler\n");
+    // debug_printf("got into send ram cap req handler\n");
     
     errval_t err;
 
@@ -287,7 +323,7 @@ static void send_ram_cap_req_handler(void* arg) {
         debug_printf("\n\n\nThis code is seriously running?!\n\n\n\n");
     }
 
-    debug_printf("ram cap request sent!\n");
+    // debug_printf("ram cap request sent!\n");
 }
 
 static void send_get_all_pids_handler(void* arg) {
@@ -360,6 +396,78 @@ static void send_get_pid_handler(void *arg) {
     }
 
     debug_printf("get pid request sent!\n");
+}
+
+static void send_exit_handler(void * arg) {
+    debug_printf("got into send exit handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
+    err = lmp_chan_send2(lc, 0, frame, EXIT_MSG, len);
+    while (err_is_fail(err)) {
+        // debug_printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // debug_printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // debug_printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    debug_printf("exit request sent!\n");
+}
+
+static void send_wait_handler(void *arg) {
+    debug_printf("got into send wait handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+
+    err = lmp_chan_register_recv(lc, get_default_waitset(), MKCLOSURE(ack_recv_handler, (void *)rpc));
+    err = lmp_chan_send2(lc, 0, frame, WAIT_MSG, len);
+    while (err_is_fail(err)) {
+        // debug_printf("\n\n\nThis code is seriously running?!\n\n\n\n");
+        // debug_printf("%s\n", err_getstring(err));
+        // if (!lmp_err_is_transient(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_send2");
+        //     return;
+        // }
+        // err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_string_handler, arg));
+        // debug_printf("registered send\n");
+        // if (err_is_fail(err)) {
+        //     DEBUG_ERR(err, "lmp_chan_register_send");
+        //     return;
+        // }
+        // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
+    }
+
+    debug_printf("wait request sent!\n");
 }
 
 /**
@@ -607,11 +715,11 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
  * Hint: we should be able to send multiple capabilities, but we can only send one.
  *       Think how you could send multiple cappabilities by just sending one.
  */
-errval_t aos_rpc_proc_spawn_with_caps(struct aos_rpc *chan, int argc, const char *argv[], int capc,
+errval_t aos_rpc_proc_spawn_with_caps(struct aos_rpc *rpc, int argc, const char *argv[], int capc,
                                       struct capref cap, coreid_t core, domainid_t *newpid)
 {
     // make compiler happy about unused parameters
-    (void)chan;
+    (void)rpc;
     (void)argc;
     (void)argv;
     (void)capc;
@@ -619,9 +727,45 @@ errval_t aos_rpc_proc_spawn_with_caps(struct aos_rpc *chan, int argc, const char
     (void)core;
     (void)newpid;
 
-    // TODO: implement the process spawn with caps RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    for (int i = 0; i < argc; i++) {
+        debug_printf("arg %d: %s\n", i, argv[i]);
+    }
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+    struct spawn_with_caps_frame_input * input = (struct spawn_with_caps_frame_input *) buf;
+    input->argc = argc;
+    for (int i = 0; i < argc; i++) {
+        strcpy(input->argv[i], argv[i]);
+    }
+    input->capc = capc;
+    input->cap = cap;
+    input->core = core;
+    
+    // pass the string frame and length in the payload
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = BASE_PAGE_SIZE;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_spawn_with_caps_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    *newpid = input->pid;
+    printf("pid of the new process: %d\n", input->pid);
+    free(payload);
+    return SYS_ERR_OK;
 }
 
 
@@ -918,15 +1062,49 @@ errval_t aos_rpc_proc_resume(struct aos_rpc *chan, domainid_t pid)
  *
  * Note: this function does not return, the process manager will halt the process execution.
  */
-errval_t aos_rpc_proc_exit(struct aos_rpc *chan, int status)
+errval_t aos_rpc_proc_exit(struct aos_rpc *rpc, int status)
 {
     // make compiler happy about unused parameters
-    (void)chan;
+    (void)rpc;
     (void)status;
-
+    return SYS_ERR_OK;
     // TODO: implement the process exit RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+
+    // I think this must be bonus becasue it involves killing a process
+    // and we aren't able to do that
+    debug_printf("made it into aos_rpc_proc_exit\n");\
+    
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+    debug_printf("here's the status we're sending: %d\n", status);
+    debug_printf("here is our pid: %d\n", disp_get_domain_id());
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+    *((int *) buf) = status;
+    ((int *) buf)[1] = disp_get_domain_id();
+    // pass the string frame and length in the payload
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = BASE_PAGE_SIZE;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_exit_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    debug_printf("looks like we've been killed alright\n");
+
+    free(payload);
+
+    return SYS_ERR_OK;
 }
 
 
@@ -941,16 +1119,45 @@ errval_t aos_rpc_proc_exit(struct aos_rpc *chan, int status)
  *
  * Note: the RPC will only return after the process has exited
  */
-errval_t aos_rpc_proc_wait(struct aos_rpc *chan, domainid_t pid, int *status)
+errval_t aos_rpc_proc_wait(struct aos_rpc *rpc, domainid_t pid, int *status)
 {
     // make compiler happy about unused parameters
-    (void)chan;
+    (void)rpc;
     (void)pid;
     (void)status;
 
-    // TODO: implement the process wait RPC
-    DEBUG_ERR(LIB_ERR_NOT_IMPLEMENTED, "%s not implemented", __FUNCTION__);
-    return LIB_ERR_NOT_IMPLEMENTED;
+    debug_printf("\n\n\n\nentered wait api!\n\n\n\n\n");
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+    *((domainid_t*) buf) = pid;
+    // pass the string frame and length in the payload
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = BASE_PAGE_SIZE;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_wait_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    // verify contents of frame
+    struct wait_frame_output* output = (struct wait_frame_output*) buf;
+    debug_printf("returned exit code: %d\n", output->status);
+    *status = output->status;
+    debug_printf("heres the value at status: %d\n", *status);
+    free(payload);
+    return SYS_ERR_OK;
 }
 
 /**

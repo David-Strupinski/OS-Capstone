@@ -41,6 +41,9 @@ enum msg_type {
     RAM_CAP_ACK,
     GET_ALL_PIDS,
     GET_PID,
+    EXIT_MSG,
+    WAIT_MSG,
+    SPAWN_WITH_CAPS_MSG,
 };
 
 
@@ -97,6 +100,19 @@ struct get_all_pids_frame_output {
 };
 
 struct get_pid_frame_output {
+    domainid_t pid;
+};
+
+struct wait_frame_output {
+    int status;
+};
+
+struct spawn_with_caps_frame_input {
+    int argc;
+    char argv[8][8];
+    int capc;
+    struct capref cap;
+    coreid_t core;
     domainid_t pid;
 };
 

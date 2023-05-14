@@ -140,13 +140,14 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
         si->pid = si->next->pid + 1;
     }
     root = si;
-
+    debug_printf("got to the multiboot\n");
     struct mem_region* module = multiboot_find_module(bi, argv[0]);
     if (module == NULL) {
-        printf("multiboot_find_module failed to find %s\n", argv[0]);
+        debug_printf("multiboot_find_module failed to find %s\n", argv[0]);
         return SPAWN_ERR_FIND_MODULE;
     }
-    
+        debug_printf("got past the multiboot\n");
+
     // added line bellow
     si->module = module;
 
@@ -512,9 +513,8 @@ errval_t proc_mgmt_exit(int status)
 {
     // make compiler happy about unused parameters
     (void)status;
-
-    USER_PANIC("should not be called by the process manager\n");
-    return SYS_ERR_OK;
+    USER_PANIC("FUNCIOTNALITY NOT IMPLENMENTED\n");
+    return SYS_ERR_NOT_IMPLEMENTED;
 }
 
 /**
@@ -533,13 +533,21 @@ errval_t proc_mgmt_terminated(domainid_t pid, int status)
     (void)pid;
     (void)status;
 
-    USER_PANIC("functionality not implemented\n");
-    // TODO:
-    //   - find the process with the given PID and trigger the exit procedure
-    //   - remove the process from the process table
-    //   - clean up the state of the process
-    //   - for M4: notify waiting processes
-    return LIB_ERR_NOT_IMPLEMENTED;
+    debug_printf("entering proc_mgmt_exit\n");
+    struct spawninfo * curr = root;
+    while (curr != NULL) {
+        if (curr->pid == pid) {
+            // found our process
+            debug_printf("found our process, here is the exit code we are using: %d\n", status);
+            curr->exitcode = status;
+            curr->state = SPAWN_STATE_TERMINATED;
+            // TODO: actually kill the process (bonus)
+            return SYS_ERR_OK;
+        }
+        curr = curr->next;
+    }
+    debug_printf("\n!\n!\n!\n!tried to kill a process that doesn't exist!\n!\n!\n!\n");
+    return SPAWN_ERR_DOMAIN_NOTFOUND;
 }
 
 
@@ -557,8 +565,26 @@ errval_t proc_mgmt_wait(domainid_t pid, int *status)
     (void)pid;
     (void)status;
 
-    USER_PANIC("should not be called by the process manager\n");
-    return SYS_ERR_OK;
+    struct spawninfo * curr = root;
+    debug_printf("spawn_state_terminated: %d, killed: %d\n", SPAWN_STATE_TERMINATED, SPAWN_STATE_KILLED);
+
+    while (curr != NULL) {
+        if (curr->pid == pid) {
+            debug_printf("pid: %d, state: %d\n", curr->pid, curr->state);
+            while(curr->state != SPAWN_STATE_TERMINATED && curr->state != SPAWN_STATE_KILLED) {
+                // wait;
+                debug_printf("waiting...\n");
+                //thread_yield();
+                // event_dispatch(get_default_waitset());
+            }
+            
+            debug_printf("heres the exit code from inside proc_mgmt_wait: %d\n", curr->exitcode);
+            *status = curr->exitcode;
+            return SYS_ERR_OK;
+        }
+        curr = curr->next;
+    }
+    return SPAWN_ERR_DOMAIN_NOTFOUND;
 }
 
 

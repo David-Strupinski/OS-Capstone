@@ -381,6 +381,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     child_disp.slot = TASKCN_SLOT_DISPATCHER,
     err = cap_copy(child_disp, dispatcher);
     DEBUG_ERR_ON_FAIL(err, "copying dispatcher cap to child\n");
+    disp_gen->domain_id = pid;
 
     struct capref selfep;
     selfep.cnode = child_task_cnode,

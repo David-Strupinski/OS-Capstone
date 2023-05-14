@@ -47,7 +47,7 @@ __weak_reference(libc_exit, _exit);
 void libc_exit(int status)
 {
     aos_rpc_proc_exit(aos_rpc_get_process_channel(), status);
-    debug_printf("actually exiting NYI, but other processes were notified that we're dead!\n");
+    debug_printf("exit NYI\n");
 
     thread_exit(status);
 
@@ -104,7 +104,7 @@ static size_t aos_terminal_write(const char *buf, size_t len)
         }
         i++;
     }
-    debug_printf("len: %d\n", i);
+    // debug_printf("len: %d\n", i);
     return len;
 }
 

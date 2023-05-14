@@ -187,10 +187,10 @@ static void test_spawn_rpc(void)
         return;
     }
     
-    // err = aos_rpc_proc_spawn_with_cmdline(proc_rpc, CMDLINE, core, &pid);
+    err = aos_rpc_proc_spawn_with_cmdline(proc_rpc, CMDLINE, core, &pid);
     // err = aos_rpc_proc_spawn_with_default_args(proc_rpc, "hello", core, &pid);
-    char* args[5] = {"hello", "these", "are", "the", "args"};
-    err = aos_rpc_proc_spawn_with_caps(proc_rpc, 5, (const char**)args, 0, NULL_CAP, core, &pid);
+    // char* args[5] = {"hello", "these", "are", "the", "args"};
+    // err = aos_rpc_proc_spawn_with_caps(proc_rpc, 5, (const char**)args, 0, NULL_CAP, core, &pid);
     if (err_is_fail(err)) {
         grading_test_fail("R1-4", "failed to load: %s\n", err_getstring(err));
         return;

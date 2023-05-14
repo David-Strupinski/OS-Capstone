@@ -68,7 +68,6 @@ void ack_recv_handler(void *arg) {
         return;
     } else if (msg.words[0] == RAM_CAP_ACK) {
         err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-        debug_print_capref(retcap);
         // debug_printf("received ram cap size: %d\n", msg.words[1]);
         global_retcap = retcap;
         global_retbytes = msg.words[1];
@@ -82,11 +81,6 @@ void ack_recv_handler(void *arg) {
     }
 
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-}
-
-void pid_recv_handler(void* arg) {
-    debug_printf("received a pid!\n");
-    (void) arg;
 }
 
 
@@ -141,7 +135,7 @@ errval_t aos_rpc_init(struct aos_rpc *rpc) {
 
 static void send_num_handler(void *arg)
 {
-    debug_printf("got into send num handler\n");
+    // debug_printf("got into send num handler\n");
     
     errval_t err;
     struct aos_rpc_num_payload *payload = (struct aos_rpc_num_payload *) arg;
@@ -165,12 +159,12 @@ static void send_num_handler(void *arg)
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, NULL_CAP, 2, num);
     }
 
-    debug_printf("number sent!\n");
+    // debug_printf("number sent!\n");
 }
 
 static void send_string_handler(void *arg)
 {
-    debug_printf("got into send string handler\n");
+    // debug_printf("got into send string handler\n");
     
     errval_t err;
 
@@ -202,12 +196,12 @@ static void send_string_handler(void *arg)
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("string sent!\n");
+    // debug_printf("string sent!\n");
 }
 
 static void send_getchar_handler(void *arg)
 {
-    debug_printf("got into send char handler\n");
+    // debug_printf("got into send char handler\n");
     
     errval_t err;
     struct aos_rpc *rpc = arg;
@@ -220,7 +214,7 @@ static void send_getchar_handler(void *arg)
         debug_printf("\n\n\nlooks like the useless code wasn't useless after all.\n\n\n");
     }
 
-    debug_printf("char sent!\n");
+    // debug_printf("char sent!\n");
 }
 
 static void send_putchar_handler(void *arg) {
@@ -241,7 +235,7 @@ static void send_putchar_handler(void *arg) {
 }
 
 static void send_spawn_with_caps_handler(void * arg) {
-    debug_printf("got into spawn with caps request send handler\n");
+    // debug_printf("got into spawn with caps request send handler\n");
     
     errval_t err;
 
@@ -273,11 +267,11 @@ static void send_spawn_with_caps_handler(void * arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("spawn with caps request sent!\n");
+    // debug_printf("spawn with caps request sent!\n");
 }
 
 static void send_cmdline_handler(void* arg) {
-    debug_printf("got into send cmdline handler\n");
+    // debug_printf("got into send cmdline handler\n");
     
     errval_t err;
 
@@ -306,7 +300,7 @@ static void send_cmdline_handler(void* arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("cmdline sent!\n");
+    // debug_printf("cmdline sent!\n");
 }
 
 static void send_ram_cap_req_handler(void* arg) {
@@ -327,7 +321,7 @@ static void send_ram_cap_req_handler(void* arg) {
 }
 
 static void send_get_all_pids_handler(void* arg) {
-    debug_printf("got into send get all pids handler\n");
+    // debug_printf("got into send get all pids handler\n");
     
     errval_t err;
 
@@ -359,7 +353,7 @@ static void send_get_all_pids_handler(void* arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("get_all_pids request sent!\n");
+    // debug_printf("get_all_pids request sent!\n");
 }
 
 static void send_get_pid_handler(void *arg) {
@@ -395,11 +389,11 @@ static void send_get_pid_handler(void *arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("get pid request sent!\n");
+    // debug_printf("get pid request sent!\n");
 }
 
 static void send_exit_handler(void * arg) {
-    debug_printf("got into send exit handler\n");
+    // debug_printf("got into send exit handler\n");
     
     errval_t err;
 
@@ -431,11 +425,11 @@ static void send_exit_handler(void * arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("exit request sent!\n");
+    // debug_printf("exit request sent!\n");
 }
 
 static void send_wait_handler(void *arg) {
-    debug_printf("got into send wait handler\n");
+    // debug_printf("got into send wait handler\n");
     
     errval_t err;
 
@@ -467,7 +461,7 @@ static void send_wait_handler(void *arg) {
         // err = lmp_chan_send2(lc, LMP_SEND_FLAGS_DEFAULT, frame, 3, len);
     }
 
-    debug_printf("wait request sent!\n");
+    // debug_printf("wait request sent!\n");
 }
 
 /**
@@ -483,7 +477,7 @@ static void send_wait_handler(void *arg) {
 errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
 {
     // make compiler happy about unused parameters
-    debug_printf("send num\n");
+    // debug_printf("send num\n");
     (void)rpc;
     (void)num;
     // debug_printf("made it in to send num api\n");
@@ -542,10 +536,10 @@ errval_t aos_rpc_send_string(struct aos_rpc *rpc, const char *string)
     // pass the string frame and length in the payload
     struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
     payload->rpc = rpc;
-    debug_print_cap_at_capref(frame);
+    // debug_print_cap_at_capref(frame);
     //err = cap_copy(payload->frame, frame);
     payload->frame = frame;
-    debug_print_cap_at_capref(payload->frame);
+    // debug_print_cap_at_capref(payload->frame);
     payload->len = len;
 
     // send the frame and the length on the channel
@@ -638,7 +632,7 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
     // make compiler happy about unused parameters
     (void)rpc;
     (void)retc;
-    debug_printf("sending getchar\n");
+    // debug_printf("sending getchar\n");
 
     // TODO implement functionality to request a character from
     // the serial driver.
@@ -763,7 +757,7 @@ errval_t aos_rpc_proc_spawn_with_caps(struct aos_rpc *rpc, int argc, const char 
     event_dispatch(get_default_waitset());
 
     *newpid = input->pid;
-    printf("pid of the new process: %d\n", input->pid);
+    // printf("pid of the new process: %d\n", input->pid);
     free(payload);
     return SYS_ERR_OK;
 }
@@ -898,8 +892,8 @@ errval_t aos_rpc_proc_get_all_pids(struct aos_rpc *rpc, domainid_t **pids, size_
 
     // verify contents of frame
     struct get_all_pids_frame_output* output = (struct get_all_pids_frame_output*) buf;
-    debug_printf("here is the number of pids: %d\n", output->num_pids);
-    debug_printf("here are the pids:\n");
+    // debug_printf("here is the number of pids: %d\n", output->num_pids);
+    // debug_printf("here are the pids:\n");
     *pids = output->pids;
     *pid_count = output->num_pids;
 
@@ -1072,12 +1066,12 @@ errval_t aos_rpc_proc_exit(struct aos_rpc *rpc, int status)
 
     // I think this must be bonus becasue it involves killing a process
     // and we aren't able to do that
-    debug_printf("made it into aos_rpc_proc_exit\n");\
+    // debug_printf("made it into aos_rpc_proc_exit\n");
     
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
-    debug_printf("here's the status we're sending: %d\n", status);
-    debug_printf("here is our pid: %d\n", disp_get_domain_id());
+    // debug_printf("here's the status we're sending: %d\n", status);
+    // debug_printf("here is our pid: %d\n", disp_get_domain_id());
     // allocate and map a frame, copying to it the string contents
     struct capref frame;
     void *buf;
@@ -1100,7 +1094,7 @@ errval_t aos_rpc_proc_exit(struct aos_rpc *rpc, int status)
     event_dispatch(get_default_waitset());
     event_dispatch(get_default_waitset());
 
-    debug_printf("looks like we've been killed alright\n");
+    // debug_printf("looks like we've been killed alright\n");
 
     free(payload);
 
@@ -1126,7 +1120,7 @@ errval_t aos_rpc_proc_wait(struct aos_rpc *rpc, domainid_t pid, int *status)
     (void)pid;
     (void)status;
 
-    debug_printf("\n\n\n\nentered wait api!\n\n\n\n\n");
+    // debug_printf("\n\n\n\nentered wait api!\n\n\n\n\n");
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
@@ -1153,9 +1147,9 @@ errval_t aos_rpc_proc_wait(struct aos_rpc *rpc, domainid_t pid, int *status)
 
     // verify contents of frame
     struct wait_frame_output* output = (struct wait_frame_output*) buf;
-    debug_printf("returned exit code: %d\n", output->status);
+    // debug_printf("returned exit code: %d\n", output->status);
     *status = output->status;
-    debug_printf("heres the value at status: %d\n", *status);
+    // debug_printf("heres the value at status: %d\n", *status);
     free(payload);
     return SYS_ERR_OK;
 }
@@ -1209,10 +1203,10 @@ struct aos_rpc *aos_rpc_get_init_channel(void)
     // TODO: Return channel to talk to init process
     errval_t        err;
     struct aos_rpc *rpc = global_rpc;
-    debug_printf("entered init channel\n");
+    // debug_printf("entered init channel\n");
 
     //if (global_rpc == NULL) {
-        debug_printf("creating new aos_rpc channel\n");
+        // debug_printf("creating new aos_rpc channel\n");
         rpc = malloc(sizeof(struct aos_rpc));
         if (rpc == NULL) {
             // debug_printf("aos_rpc_get_init_channel: malloc failed\n");

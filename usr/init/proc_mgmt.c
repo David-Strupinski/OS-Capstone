@@ -140,13 +140,11 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
         si->pid = si->next->pid + 1;
     }
     root = si;
-    debug_printf("got to the multiboot\n");
     struct mem_region* module = multiboot_find_module(bi, argv[0]);
     if (module == NULL) {
         debug_printf("multiboot_find_module failed to find %s\n", argv[0]);
         return SPAWN_ERR_FIND_MODULE;
     }
-        debug_printf("got past the multiboot\n");
 
     // added line bellow
     si->module = module;
@@ -342,13 +340,10 @@ errval_t proc_mgmt_get_pid_by_name(const char *name, domainid_t *pid)
     // make compiler happy about unused parameters
     (void)name;
     (void)pid;
-    debug_printf("heres the string were looking for: %s\n", name);
     struct spawninfo *curr = root;
     while (curr != NULL) {
-        debug_printf("here's the current binary: %s\n", curr->binary_name);
         if (strcmp(name, curr->binary_name) == 0) {
             *pid = curr->pid;
-            debug_printf("found pid: %d\n", curr->pid);
             return SYS_ERR_OK;
         }
         curr = curr->next;

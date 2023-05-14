@@ -192,6 +192,16 @@ static void test_spawn_rpc(void)
     grading_printf("waiting 5 seconds to give the other domain chance to run...\n");
     barrelfish_usleep(5000000);
 
+    grading_printf("testing get all pids\n");
+    domainid_t * pid_array;
+    size_t pid_count;
+    aos_rpc_proc_get_all_pids(proc_rpc, &pid_array, &pid_count);
+    grading_printf("number of pids: %d\n", pid_count);
+    grading_printf("printing all pids: \n");
+    for (size_t i = 0; i < pid_count - 1; i++)  {
+        printf("%d, ", pid_array[i]);
+    }
+    printf("%d\n", pid_array[pid_count - 1]);
     grading_test_pass("R1-4", "test_spawn_rpc\n");
 }
 

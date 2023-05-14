@@ -24,6 +24,8 @@
 #include <grading/io.h>
 #include <proc_mgmt/proc_mgmt.h>
 
+#include <aos/systime.h>
+
 
 #define NUM_MEMORY_REQUESTS 10
 #define CMDLINE             "hello arg1 arg2 arg3"
@@ -41,7 +43,12 @@ static void test_basic_rpc(void)
     }
 
     grading_printf("sending number 42.\n");
+    uint32_t before_time = systime_now();
     err = aos_rpc_send_number(init_rpc, 42);
+    uint32_t after_time = systime_now();
+    uint32_t microseconds = systime_to_us(after_time - before_time);
+    debug_printf("microseconds for call: %lu\n", systime_to_us(after_time - before_time));
+    debug_printf("clock cycle estimation: %lf\n", (double)microseconds / 0.00083333333333333);
     if (err_is_fail(err)) {
         grading_test_fail("R1-1", "failed to send number: %s\n", err_getstring(err));
         return;

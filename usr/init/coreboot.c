@@ -210,14 +210,12 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
 
     errval_t err;
 
-    // Implement me!
-    debug_printf("booting core %d\n", mpid);
-
     // ============================================================================================
     // Get a new KCB by retyping a RAM cap to ObjType_KernelControlBlock.
     // Note that it should at least OBJSIZE_KCB, and it should also be aligned
     // to a multiple of 16k.
     // ============================================================================================
+
     struct capref kcb_ram_capref;
     err = ram_alloc_aligned(&kcb_ram_capref, OBJSIZE_KCB, 4 * BASE_PAGE_SIZE);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate ram for KCB\n");
@@ -258,8 +256,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
 
     // map the CPU driver frame
     void *cpu_buf;
-    // err = paging_map_frame_attr(get_current_paging_state(), &cpu_buf, cpu_bytes, cpu_frame, VREGION_FLAGS_READ_WRITE);
-    debug_print_cap_at_capref(cpu_frame);
     err = paging_map_frame_attr(get_current_paging_state(), &cpu_buf, cpu_bytes, cpu_frame, VREGION_FLAGS_READ_WRITE);
 
     DEBUG_ERR_ON_FAIL(err, "couldn't map CPU driver frame\n");
@@ -294,8 +290,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     genvaddr_t cpu_reloc_entry_point;
     err = load_elf_binary((genvaddr_t)cpu_buf, &cpu_mi, cpu_phys_entry_point, &cpu_reloc_entry_point);
     DEBUG_ERR_ON_FAIL(err, "couldn't load CPU driver binary\n");
-
-    debug_printf("loaded CPU driver binary\n");
 
     // ============================================================================================
     // Get and load the boot driver binary.
@@ -359,13 +353,12 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     err = load_elf_binary((genvaddr_t)boot_buf, &boot_mi, boot_phys_entry_point, &boot_reloc_entry_point);
     DEBUG_ERR_ON_FAIL(err, "couldn't load boot driver binary\n");
 
-    debug_printf("loaded boot driver binary\n");
-
     // ============================================================================================
     // Relocate the boot and CPU driver. The boot driver runs with a 1:1
     // VA->PA mapping. The CPU driver is expected to be loaded at the
     // high virtual address space, at offset ARMV8_KERNEL_OFFSET.
     // ============================================================================================
+
     err = relocate_elf((genvaddr_t)boot_buf, &boot_mi, 0);
     DEBUG_ERR_ON_FAIL(err, "couldn't relocate boot driver\n");
     err = relocate_elf((genvaddr_t)cpu_buf, &cpu_mi, ARMv8_KERNEL_OFFSET);
@@ -374,6 +367,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // ============================================================================================
     // Allocate a page for the core data struct
     // ============================================================================================
+
     struct capref cd_frame;
     err = frame_alloc(&cd_frame, BASE_PAGE_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for core data struct\n");
@@ -387,14 +381,13 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // ============================================================================================
     // Allocate stack memory for the new cpu driver (at least 16 pages)
     // ============================================================================================
+
     struct capref stack_ram;
     err = ram_alloc(&stack_ram, 16 * BASE_PAGE_SIZE);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate stack for CPU driver\n");
     struct capability ram_cap;
     err = cap_direct_identify(stack_ram, &ram_cap);
-    // void *stack_buf;
-    // err = paging_map_frame_attr(get_current_paging_state(), &stack_buf, 16 * BASE_PAGE_SIZE, stack_frame, VREGION_FLAGS_READ_WRITE);
-
+    
     // ============================================================================================
     // Fill in the core data struct, for a description, see the definition
     // in include/target/aarch64/barrelfish_kpi/arm_core_data.h
@@ -416,7 +409,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
     // struct capability init_cap;
     // err = cap_direct_identify(init_ram, &init_cap);
-
     
     cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;
     cd->cpu_driver_stack = ram_cap.u.ram.base + 16 * BASE_PAGE_SIZE;
@@ -441,6 +433,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // Find the boot driver entry point. Look for the symbol "boot_entry_psci"
     // Flush the cache.
     // ============================================================================================
+    
     // vscode doesn't like this cast, but the compiler requires it
     cpu_idcache_wbinv_range((vm_offset_t)cd_buf, BASE_PAGE_SIZE);
 
@@ -451,7 +444,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // ============================================================================================
 
     err = invoke_monitor_spawn_core(cd->dst_arch_id, CPU_ARM8, boot_phys_entry_point, cd_cap.u.frame.base, 0);
-    DEBUG_ERR_ON_FAIL(err, "couldnt invoke monitor to spawn core\n");
+    DEBUG_ERR_ON_FAIL(err, "couldn't invoke monitor to spawn core\n");
 
     return SYS_ERR_OK;
 }

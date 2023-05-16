@@ -61,7 +61,7 @@ static void spawn_one_without_args(void)
 errval_t grading_run_tests_multicore(void)
 {
     if (grading_options.m5_subtest_run == 0) {
-        return SYS_ERR_OK;
+        //return SYS_ERR_OK;
     }
 
     grading_printf("#################################################\n");

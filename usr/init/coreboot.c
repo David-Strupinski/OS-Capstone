@@ -387,14 +387,26 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // TODO: calculate the size of init
     struct armv8_coredata_memreg init_mem;
     struct capref init_ram;
-    err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + 32 * BASE_PAGE_SIZE);
+    err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + 512 * BASE_PAGE_SIZE);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
     struct capability init_cap;
     err = cap_direct_identify(init_ram, &init_cap);
     init_mem.base = init_cap.u.ram.base;
     init_mem.length = init_cap.u.ram.bytes;
 
-    // // allocate space for the URPC frame
+    // find the init binary
+    struct mem_region *init_mr;
+    init_mr = multiboot_find_module(bi, init);
+    if (init_mr == NULL) {
+        debug_printf("couldn't find init module\n");
+        return -1;
+    }
+    struct armv8_coredata_memreg monitor_binary;
+    monitor_binary.base = init_mr->mr_base;
+    monitor_binary.length = init_mr->mrmod_size;
+    debug_printf("init binary base: %p size %lu\n", monitor_binary.base, monitor_binary.length);
+
+    // allocate space for the URPC frame
     struct armv8_coredata_memreg urpc_mem;
     struct capref urpc_ram;
     err = ram_alloc(&urpc_ram, BASE_PAGE_SIZE);
@@ -411,9 +423,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     memset(&cd->cpu_driver_cmdline, 0, 128);
     cd->memory = init_mem;
     cd->urpc_frame = urpc_mem;
-
-    // TODO: fill in monitor_binary
-
+    cd->monitor_binary = monitor_binary;
     cd->kcb = kcb_ram_capability.u.ram.base;
     cd->src_core_id = mpid;
     cd->dst_core_id = 1;  // TODO: fix so we can use more than two cores

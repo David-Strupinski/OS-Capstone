@@ -226,6 +226,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     DEBUG_ERR_ON_FAIL(err, "couldn't retype RAM capability into KCB capability\n");
     struct capability kcb_ram_capability;
     err = cap_direct_identify(kcb_ram_capref, &kcb_ram_capability);
+    debug_printf("kcb base: %p size %lu\n", kcb_ram_capability.u.ram.base, kcb_ram_capability.u.ram.bytes);
 
     // ============================================================================================
     // Get and load the CPU driver binary.
@@ -382,17 +383,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // Fill in the core data struct, for a description, see the definition
     // in include/target/aarch64/barrelfish_kpi/arm_core_data.h
     // ============================================================================================
-    
-    // allocate some space to load the init process
-    // TODO: calculate the size of init
-    struct armv8_coredata_memreg init_mem;
-    struct capref init_ram;
-    err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + 512 * BASE_PAGE_SIZE);
-    DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
-    struct capability init_cap;
-    err = cap_direct_identify(init_ram, &init_cap);
-    init_mem.base = init_cap.u.ram.base;
-    init_mem.length = init_cap.u.ram.bytes;
 
     // find the init binary
     struct mem_region *init_mr;
@@ -406,6 +396,17 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     monitor_binary.length = init_mr->mrmod_size;
     debug_printf("init binary base: %p size %lu\n", monitor_binary.base, monitor_binary.length);
 
+    // allocate some space to load the init process
+    struct armv8_coredata_memreg init_mem;
+    struct capref init_ram;
+    err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + ROUND_UP(monitor_binary.length, BASE_PAGE_SIZE));
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
+    struct capability init_cap;
+    err = cap_direct_identify(init_ram, &init_cap);
+    init_mem.base = init_cap.u.ram.base;
+    init_mem.length = init_cap.u.ram.bytes;
+    debug_printf("init mem base: %p size %lu\n", init_mem.base, init_mem.length);
+
     // allocate space for the URPC frame
     struct armv8_coredata_memreg urpc_mem;
     struct capref urpc_ram;
@@ -415,9 +416,12 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     err = cap_direct_identify(urpc_ram, &urpc_cap);
     urpc_mem.base = urpc_cap.u.ram.base;
     urpc_mem.length = urpc_cap.u.ram.bytes;
+    debug_printf("urpc base: %p size %lu\n", urpc_mem.base, urpc_mem.length);
+
     
+    // set the fields of the core data struct
     cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;
-    cd->cpu_driver_stack = ram_cap.u.ram.base + 16 * BASE_PAGE_SIZE;
+    cd->cpu_driver_stack = ram_cap.u.ram.base + ram_cap.u.ram.bytes;
     cd->cpu_driver_stack_limit = ram_cap.u.ram.base;
     cd->cpu_driver_entry = cpu_reloc_entry_point;
     memset(&cd->cpu_driver_cmdline, 0, 128);
@@ -425,10 +429,10 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     cd->urpc_frame = urpc_mem;
     cd->monitor_binary = monitor_binary;
     cd->kcb = kcb_ram_capability.u.ram.base;
-    cd->src_core_id = mpid;
-    cd->dst_core_id = 1;  // TODO: fix so we can use more than two cores
+    cd->src_core_id = disp_get_core_id();
+    cd->dst_core_id = mpid;
     cd->src_arch_id = disp_get_core_id();
-    cd->dst_arch_id = 1;  // TODO: fix so we can use more than two cores
+    cd->dst_arch_id = mpid;
 
     // ============================================================================================
     // Find the CPU driver entry point. Look for the symbol "arch_init". Put
@@ -445,7 +449,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // already found boot driver entry point
     
     // vscode doesn't like this cast, but the compiler requires it
-    cpu_idcache_wbinv_range((vm_offset_t)cd_buf, BASE_PAGE_SIZE);
+    cpu_dcache_wbinv_range((vm_offset_t)cd_buf, BASE_PAGE_SIZE);
 
     // ============================================================================================
     // Call the invoke_monitor_spawn_core with the entry point
@@ -455,6 +459,11 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
 
     err = invoke_monitor_spawn_core(cd->dst_arch_id, CPU_ARM8, boot_reloc_entry_point, cd_cap.u.frame.base, 0);
     DEBUG_ERR_ON_FAIL(err, "couldn't invoke monitor to spawn core\n");
+
+    // set the return core parameter
+    if (core != NULL) {
+        *core = (coreid_t)mpid;
+    }
 
     return SYS_ERR_OK;
 }

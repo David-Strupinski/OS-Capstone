@@ -218,20 +218,23 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // Note that it should at least OBJSIZE_KCB, and it should also be aligned
     // to a multiple of 16k.
     // ============================================================================================
-    struct capref kcb_ram_cap;
-    err = ram_alloc_aligned(&kcb_ram_cap, OBJSIZE_KCB, 4 * BASE_PAGE_SIZE);
+    struct capref kcb_ram_capref;
+    err = ram_alloc_aligned(&kcb_ram_capref, OBJSIZE_KCB, 4 * BASE_PAGE_SIZE);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate ram for KCB\n");
-    struct capref kcb_cap;
-    err = slot_alloc(&kcb_cap);
+    struct capref kcb_capref;
+    err = slot_alloc(&kcb_capref);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate slot for KCB\n");
-    err = cap_retype(kcb_cap, kcb_ram_cap, 0, ObjType_KernelControlBlock, OBJSIZE_KCB);
+    err = cap_retype(kcb_capref, kcb_ram_capref, 0, ObjType_KernelControlBlock, OBJSIZE_KCB);
     DEBUG_ERR_ON_FAIL(err, "couldn't retype RAM capability into KCB capability\n");
+    struct capability kcb_ram_capability;
+    err = cap_direct_identify(kcb_ram_capref, &kcb_ram_capability);
 
     // ============================================================================================
     // Get and load the CPU driver binary.
     // ============================================================================================
 
-    // allocating a useless frame seems to stop processes from breaking???
+    // allocate a useless frame to let our paging code know what's going on
+    // TODO: this is a hack!
     struct capref test_frame;
     err = frame_alloc(&test_frame, BASE_PAGE_SIZE, NULL);
 
@@ -298,6 +301,11 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // Get and load the boot driver binary.
     // ============================================================================================
     
+    // allocate a useless frame to let our paging code know what's going on
+    // TODO: this is a hack!
+    struct capref test_frame_2;
+    err = frame_alloc(&test_frame_2, BASE_PAGE_SIZE, NULL);
+
     // find the boot driver and get its frame
     struct mem_region *boot_mr;
     boot_mr = multiboot_find_module(bi, boot_driver);
@@ -358,21 +366,71 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // VA->PA mapping. The CPU driver is expected to be loaded at the
     // high virtual address space, at offset ARMV8_KERNEL_OFFSET.
     // ============================================================================================
-    // err = relocate_elf(boot_driver.vaddr, boot_mem, 0);
-    // DEBUG_ERR_ON_FAIL()
+    err = relocate_elf((genvaddr_t)boot_buf, &boot_mi, 0);
+    DEBUG_ERR_ON_FAIL(err, "couldn't relocate boot driver\n");
+    err = relocate_elf((genvaddr_t)cpu_buf, &cpu_mi, ARMv8_KERNEL_OFFSET);
+    DEBUG_ERR_ON_FAIL(err, "couldn't relocate CPU driver\n");
 
     // ============================================================================================
     // Allocate a page for the core data struct
     // ============================================================================================
+    struct capref cd_frame;
+    err = frame_alloc(&cd_frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for core data struct\n");
+    void *cd_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &cd_buf, BASE_PAGE_SIZE, cd_frame, VREGION_FLAGS_READ_WRITE);
+    struct capability cd_cap;
+    err = cap_direct_identify(cd_frame, &cd_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't identify core data capability\n");
+    struct armv8_core_data *cd = cd_buf;
 
     // ============================================================================================
     // Allocate stack memory for the new cpu driver (at least 16 pages)
     // ============================================================================================
+    struct capref stack_ram;
+    err = ram_alloc(&stack_ram, 16 * BASE_PAGE_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate stack for CPU driver\n");
+    struct capability ram_cap;
+    err = cap_direct_identify(stack_ram, &ram_cap);
+    // void *stack_buf;
+    // err = paging_map_frame_attr(get_current_paging_state(), &stack_buf, 16 * BASE_PAGE_SIZE, stack_frame, VREGION_FLAGS_READ_WRITE);
 
     // ============================================================================================
     // Fill in the core data struct, for a description, see the definition
     // in include/target/aarch64/barrelfish_kpi/arm_core_data.h
     // ============================================================================================
+    
+    // allocate some space to load the init process
+    // TODO: calculate the size of init
+    // struct armv8_coredata_memreg init_mem;
+    // struct capref init_ram;
+    // err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + elf_virtual_size());
+    // DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
+    // struct capability init_cap;
+    // err = cap_direct_identify(init_ram, &init_cap);
+
+    // // allocate space for the URPC frame
+    // struct armv8_coredata_memreg init_mem;
+    // struct capref init_ram;
+    // err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + elf_virtual_size());
+    // DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
+    // struct capability init_cap;
+    // err = cap_direct_identify(init_ram, &init_cap);
+
+    
+    cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;
+    cd->cpu_driver_stack = ram_cap.u.ram.base + 16 * BASE_PAGE_SIZE;
+    cd->cpu_driver_stack_limit = ram_cap.u.ram.base;
+    cd->cpu_driver_entry = (genvaddr_t)cpu_buf;  // TODO: probably wrong
+    memset(&cd->cpu_driver_cmdline, 0, 128);
+
+    // TODO: fill in memory, urpc_frame, monitor_binary
+
+    cd->kcb = kcb_ram_capability.u.ram.base;
+    cd->src_core_id = mpid;
+    cd->dst_core_id = 1;  // TODO: fix so we can use more than two cores
+    cd->src_arch_id = disp_get_core_id();
+    cd->dst_arch_id = 1;  // TODO: fix so we can use more than two cores
 
     // ============================================================================================
     // Find the CPU driver entry point. Look for the symbol "arch_init". Put
@@ -383,6 +441,8 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // Find the boot driver entry point. Look for the symbol "boot_entry_psci"
     // Flush the cache.
     // ============================================================================================
+    // vscode doesn't like this cast, but the compiler requires it
+    cpu_idcache_wbinv_range((vm_offset_t)cd_buf, BASE_PAGE_SIZE);
 
     // ============================================================================================
     // Call the invoke_monitor_spawn_core with the entry point
@@ -390,8 +450,10 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // boot struct as argument.
     // ============================================================================================
 
-    debug_printf("WARNING: Spawning cores not yet implemented on this platform.\n");
-    return LIB_ERR_NOT_IMPLEMENTED;
+    err = invoke_monitor_spawn_core(cd->dst_arch_id, CPU_ARM8, boot_phys_entry_point, cd_cap.u.frame.base, 0);
+    DEBUG_ERR_ON_FAIL(err, "couldnt invoke monitor to spawn core\n");
+
+    return SYS_ERR_OK;
 }
 
 /**

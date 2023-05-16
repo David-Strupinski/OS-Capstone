@@ -368,7 +368,7 @@ void gen_recv_handler(void *arg)
                 //     DEBUG_ERR(err, "registering receive handler\n");
                 //     return;
                 // }
-                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(s), MKCLOSURE(gen_recv_handler, arg));
                 // if (err_is_fail(err)) {
                 //     DEBUG_ERR(err, "registering receive handler\n");
                 //     return;
@@ -452,7 +452,7 @@ void send_ack_handler(void *arg)
 
 void send_char_handler(void *arg)
 {
-    debug_printf("sending char\n");
+    //debug_printf("sending char\n");
     struct aos_rpc_num_payload *payload = arg;
     struct aos_rpc *rpc = payload->rpc;
     struct lmp_chan *chan = rpc->lmp_chan;
@@ -465,7 +465,7 @@ void send_char_handler(void *arg)
 
     free(payload);
 
-    debug_printf("char sent: %c\n", c);
+    //debug_printf("char sent: %c\n", c);
 }
 
 void send_pid_handler(void *arg) {

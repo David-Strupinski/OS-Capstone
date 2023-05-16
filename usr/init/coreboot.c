@@ -231,11 +231,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // Get and load the CPU driver binary.
     // ============================================================================================
 
-    // allocate a useless frame to let our paging code know what's going on
-    // TODO: this is a hack!
-    struct capref test_frame;
-    err = frame_alloc(&test_frame, BASE_PAGE_SIZE, NULL);
-
     // find the CPU driver and get its frame
     struct mem_region *cpu_mr;
     cpu_mr = multiboot_find_module(bi, cpu_driver);
@@ -294,11 +289,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // ============================================================================================
     // Get and load the boot driver binary.
     // ============================================================================================
-    
-    // allocate a useless frame to let our paging code know what's going on
-    // TODO: this is a hack!
-    struct capref test_frame_2;
-    err = frame_alloc(&test_frame_2, BASE_PAGE_SIZE, NULL);
 
     // find the boot driver and get its frame
     struct mem_region *boot_mr;
@@ -413,7 +403,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;
     cd->cpu_driver_stack = ram_cap.u.ram.base + 16 * BASE_PAGE_SIZE;
     cd->cpu_driver_stack_limit = ram_cap.u.ram.base;
-    cd->cpu_driver_entry = (genvaddr_t)cpu_buf;  // TODO: probably wrong
+    cd->cpu_driver_entry = (genvaddr_t)cpu_buf + ARMv8_KERNEL_OFFSET;  // TODO: probably wrong
     memset(&cd->cpu_driver_cmdline, 0, 128);
 
     // TODO: fill in memory, urpc_frame, monitor_binary
@@ -444,6 +434,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // ============================================================================================
 
     err = invoke_monitor_spawn_core(cd->dst_arch_id, CPU_ARM8, boot_phys_entry_point, cd_cap.u.frame.base, 0);
+    debug_printf("error: %s\n", err_getstring(err));
     DEBUG_ERR_ON_FAIL(err, "couldn't invoke monitor to spawn core\n");
 
     return SYS_ERR_OK;

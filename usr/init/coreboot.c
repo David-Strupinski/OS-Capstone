@@ -385,28 +385,34 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     
     // allocate some space to load the init process
     // TODO: calculate the size of init
-    // struct armv8_coredata_memreg init_mem;
-    // struct capref init_ram;
-    // err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + elf_virtual_size());
-    // DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
-    // struct capability init_cap;
-    // err = cap_direct_identify(init_ram, &init_cap);
+    struct armv8_coredata_memreg init_mem;
+    struct capref init_ram;
+    err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + 32 * BASE_PAGE_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
+    struct capability init_cap;
+    err = cap_direct_identify(init_ram, &init_cap);
+    init_mem.base = init_cap.u.ram.base;
+    init_mem.length = init_cap.u.ram.bytes;
 
     // // allocate space for the URPC frame
-    // struct armv8_coredata_memreg init_mem;
-    // struct capref init_ram;
-    // err = ram_alloc(&init_ram, ARMV8_CORE_DATA_PAGES * BASE_PAGE_SIZE + elf_virtual_size());
-    // DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to load init\n");
-    // struct capability init_cap;
-    // err = cap_direct_identify(init_ram, &init_cap);
+    struct armv8_coredata_memreg urpc_mem;
+    struct capref urpc_ram;
+    err = ram_alloc(&urpc_ram, BASE_PAGE_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to urpc frame\n");
+    struct capability urpc_cap;
+    err = cap_direct_identify(urpc_ram, &urpc_cap);
+    urpc_mem.base = urpc_cap.u.ram.base;
+    urpc_mem.length = urpc_cap.u.ram.bytes;
     
     cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;
     cd->cpu_driver_stack = ram_cap.u.ram.base + 16 * BASE_PAGE_SIZE;
     cd->cpu_driver_stack_limit = ram_cap.u.ram.base;
-    cd->cpu_driver_entry = (genvaddr_t)cpu_buf + ARMv8_KERNEL_OFFSET;  // TODO: probably wrong
+    cd->cpu_driver_entry = cpu_reloc_entry_point;
     memset(&cd->cpu_driver_cmdline, 0, 128);
+    cd->memory = init_mem;
+    cd->urpc_frame = urpc_mem;
 
-    // TODO: fill in memory, urpc_frame, monitor_binary
+    // TODO: fill in monitor_binary
 
     cd->kcb = kcb_ram_capability.u.ram.base;
     cd->src_core_id = mpid;
@@ -419,10 +425,14 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // the address in the core data struct.
     // ============================================================================================
 
+    // already done
+
     // ============================================================================================
     // Find the boot driver entry point. Look for the symbol "boot_entry_psci"
     // Flush the cache.
     // ============================================================================================
+
+    // already found boot driver entry point
     
     // vscode doesn't like this cast, but the compiler requires it
     cpu_idcache_wbinv_range((vm_offset_t)cd_buf, BASE_PAGE_SIZE);
@@ -433,8 +443,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     // boot struct as argument.
     // ============================================================================================
 
-    err = invoke_monitor_spawn_core(cd->dst_arch_id, CPU_ARM8, boot_phys_entry_point, cd_cap.u.frame.base, 0);
-    debug_printf("error: %s\n", err_getstring(err));
+    err = invoke_monitor_spawn_core(cd->dst_arch_id, CPU_ARM8, boot_reloc_entry_point, cd_cap.u.frame.base, 0);
     DEBUG_ERR_ON_FAIL(err, "couldn't invoke monitor to spawn core\n");
 
     return SYS_ERR_OK;

@@ -208,25 +208,187 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     (void)core;
     (void)mpid;
 
+    errval_t err;
+
     // Implement me!
-    // - Get a new KCB by retyping a RAM cap to ObjType_KernelControlBlock.
-    //   Note that it should at least OBJSIZE_KCB, and it should also be aligned
-    //   to a multiple of 16k.
-    // - Get and load the CPU and boot driver binary.
-    // - Relocate the boot and CPU driver. The boot driver runs with a 1:1
-    //   VA->PA mapping. The CPU driver is expected to be loaded at the
-    //   high virtual address space, at offset ARMV8_KERNEL_OFFSET.
-    // - Allocate a page for the core data struct
-    // - Allocate stack memory for the new cpu driver (at least 16 pages)
-    // - Fill in the core data struct, for a description, see the definition
-    //   in include/target/aarch64/barrelfish_kpi/arm_core_data.h
-    // - Find the CPU driver entry point. Look for the symbol "arch_init". Put
-    //   the address in the core data struct.
-    // - Find the boot driver entry point. Look for the symbol "boot_entry_psci"
-    // - Flush the cache.
-    // - Call the invoke_monitor_spawn_core with the entry point
-    //   of the boot driver and pass the (physical, of course) address of the
-    //   boot struct as argument.
+    debug_printf("booting core %d\n", mpid);
+
+    // ============================================================================================
+    // Get a new KCB by retyping a RAM cap to ObjType_KernelControlBlock.
+    // Note that it should at least OBJSIZE_KCB, and it should also be aligned
+    // to a multiple of 16k.
+    // ============================================================================================
+    struct capref kcb_ram_cap;
+    err = ram_alloc_aligned(&kcb_ram_cap, OBJSIZE_KCB, 4 * BASE_PAGE_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate ram for KCB\n");
+    struct capref kcb_cap;
+    err = slot_alloc(&kcb_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate slot for KCB\n");
+    err = cap_retype(kcb_cap, kcb_ram_cap, 0, ObjType_KernelControlBlock, OBJSIZE_KCB);
+    DEBUG_ERR_ON_FAIL(err, "couldn't retype RAM capability into KCB capability\n");
+
+    // ============================================================================================
+    // Get and load the CPU driver binary.
+    // ============================================================================================
+
+    // allocating a useless frame seems to stop processes from breaking???
+    struct capref test_frame;
+    err = frame_alloc(&test_frame, BASE_PAGE_SIZE, NULL);
+
+    // find the CPU driver and get its frame
+    struct mem_region *cpu_mr;
+    cpu_mr = multiboot_find_module(bi, cpu_driver);
+    if (cpu_mr == NULL) {
+        debug_printf("couldn't find CPU driver module\n");
+        return -1;
+    }
+    struct capref cpu_frame = {
+        .cnode = cnode_module,
+        .slot = cpu_mr->mrmod_slot,
+    };
+
+    // get the size of the CPU driver frame
+    struct capability cpu_cap;
+    err = cap_direct_identify(cpu_frame, &cpu_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't identify frame for CPU driver\n");
+    size_t cpu_bytes = cpu_cap.u.frame.bytes;
+
+    // map the CPU driver frame
+    void *cpu_buf;
+    // err = paging_map_frame_attr(get_current_paging_state(), &cpu_buf, cpu_bytes, cpu_frame, VREGION_FLAGS_READ_WRITE);
+    debug_print_cap_at_capref(cpu_frame);
+    err = paging_map_frame_attr(get_current_paging_state(), &cpu_buf, cpu_bytes, cpu_frame, VREGION_FLAGS_READ_WRITE);
+
+    DEBUG_ERR_ON_FAIL(err, "couldn't map CPU driver frame\n");
+
+    // create and map a new frame to hold the loaded ELF binary
+    struct capref cpu_elf_frame;
+    err = frame_alloc(&cpu_elf_frame, cpu_bytes, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate CPU driver ELF frame\n");
+    void *cpu_elf_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &cpu_elf_buf, cpu_bytes, cpu_elf_frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map CPU driver ELF frame\n");
+    struct capability cpu_elf_cap;
+    err = cap_direct_identify(cpu_elf_frame, &cpu_elf_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't identify CPU driver ELF frame\n");
+
+    // set up a mem_info struct to point to the loaded ELF binary frame
+    struct mem_info cpu_mi;
+    cpu_mi.buf = cpu_elf_buf;
+    cpu_mi.phys_base = cpu_elf_cap.u.ram.base;
+    cpu_mi.size = cpu_bytes;
+
+    // get the physical entry point of the ELF binary
+    struct Elf64_Sym *cpu_entry;
+    cpu_entry = elf64_find_symbol_by_name((genvaddr_t)cpu_buf, cpu_bytes, "arch_init", 0, STT_FUNC, NULL);
+    if (cpu_entry == NULL) {
+        debug_printf("couldn't find arch_init\n");
+        return -1;
+    }
+    genvaddr_t cpu_phys_entry_point = cpu_entry->st_value;
+
+    // load the ELF binary into the ELF binary frame we set up earlier
+    genvaddr_t cpu_reloc_entry_point;
+    err = load_elf_binary((genvaddr_t)cpu_buf, &cpu_mi, cpu_phys_entry_point, &cpu_reloc_entry_point);
+    DEBUG_ERR_ON_FAIL(err, "couldn't load CPU driver binary\n");
+
+    debug_printf("loaded CPU driver binary\n");
+
+    // ============================================================================================
+    // Get and load the boot driver binary.
+    // ============================================================================================
+    
+    // find the boot driver and get its frame
+    struct mem_region *boot_mr;
+    boot_mr = multiboot_find_module(bi, boot_driver);
+    if (boot_mr == NULL) {
+        debug_printf("couldn't find boot driver module\n");
+        return -1;
+    }
+    struct capref boot_frame;
+    boot_frame.cnode = cnode_module;
+    boot_frame.slot = boot_mr->mrmod_slot;
+
+    // get the size of the boot driver frame
+    struct capability boot_cap;
+    err = cap_direct_identify(boot_frame, &boot_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't identify frame for boot driver\n");
+    size_t boot_bytes = boot_cap.u.frame.bytes;
+
+    // map the boot driver frame
+    void *boot_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &boot_buf, boot_bytes, boot_frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map boot driver frame\n");
+
+    // create and map a new frame to hold the loaded ELF binary
+    struct capref boot_elf_frame;
+    err = frame_alloc(&boot_elf_frame, boot_bytes, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate boot driver ELF frame\n");
+    void *boot_elf_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &boot_elf_buf, boot_bytes, boot_elf_frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map boot driver ELF frame\n");
+    struct capability boot_elf_cap;
+    err = cap_direct_identify(boot_elf_frame, &boot_elf_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't identify boot driver ELF frame\n");
+
+    // set up a mem_info struct to point to the loaded ELF binary frame
+    struct mem_info boot_mi;
+    boot_mi.buf = boot_elf_buf;
+    boot_mi.phys_base = boot_elf_cap.u.ram.base;
+    boot_mi.size = boot_bytes;
+
+    // get the physical entry point of the ELF binary
+    struct Elf64_Sym *boot_entry;
+    boot_entry = elf64_find_symbol_by_name((genvaddr_t)boot_buf, boot_bytes, "boot_entry_psci", 0, STT_FUNC, NULL);
+    if (boot_entry == NULL) {
+        debug_printf("couldn't find boot_entry_psci\n");
+        return -1;
+    }
+    genvaddr_t boot_phys_entry_point = boot_entry->st_value;
+
+    // load the ELF binary into the ELF binary frame we set up earlier
+    genvaddr_t boot_reloc_entry_point;
+    err = load_elf_binary((genvaddr_t)boot_buf, &boot_mi, boot_phys_entry_point, &boot_reloc_entry_point);
+    DEBUG_ERR_ON_FAIL(err, "couldn't load boot driver binary\n");
+
+    debug_printf("loaded boot driver binary\n");
+
+    // ============================================================================================
+    // Relocate the boot and CPU driver. The boot driver runs with a 1:1
+    // VA->PA mapping. The CPU driver is expected to be loaded at the
+    // high virtual address space, at offset ARMV8_KERNEL_OFFSET.
+    // ============================================================================================
+    // err = relocate_elf(boot_driver.vaddr, boot_mem, 0);
+    // DEBUG_ERR_ON_FAIL()
+
+    // ============================================================================================
+    // Allocate a page for the core data struct
+    // ============================================================================================
+
+    // ============================================================================================
+    // Allocate stack memory for the new cpu driver (at least 16 pages)
+    // ============================================================================================
+
+    // ============================================================================================
+    // Fill in the core data struct, for a description, see the definition
+    // in include/target/aarch64/barrelfish_kpi/arm_core_data.h
+    // ============================================================================================
+
+    // ============================================================================================
+    // Find the CPU driver entry point. Look for the symbol "arch_init". Put
+    // the address in the core data struct.
+    // ============================================================================================
+
+    // ============================================================================================
+    // Find the boot driver entry point. Look for the symbol "boot_entry_psci"
+    // Flush the cache.
+    // ============================================================================================
+
+    // ============================================================================================
+    // Call the invoke_monitor_spawn_core with the entry point
+    // of the boot driver and pass the (physical, of course) address of the
+    // boot struct as argument.
+    // ============================================================================================
 
     debug_printf("WARNING: Spawning cores not yet implemented on this platform.\n");
     return LIB_ERR_NOT_IMPLEMENTED;

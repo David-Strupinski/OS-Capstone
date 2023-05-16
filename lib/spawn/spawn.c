@@ -606,8 +606,17 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
         return SPAWN_ERR_LOAD;
     }
 
-    // create the struct chan
-    struct aos_rpc *rpc = aos_rpc_get_init_channel();
+    // create the struct chan (TODO: if we ever need access to this struct on init side, good luck!)
+    struct aos_rpc *rpc = malloc(sizeof(struct aos_rpc));       // memory leek time
+    if (rpc == NULL) {
+        // debug_printf("spawn_load_with_caps: malloc failed\n");
+        return SPAWN_ERR_LOAD;
+    }
+    err = aos_rpc_init(rpc);
+    DEBUG_ERR_ON_FAIL(err, "could not init rpc channel\n");
+    err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
+    DEBUG_ERR_ON_FAIL(err, "could not open channel to accept child's init endpoint\n");
+
     // give the child init's endpoint
     struct capref cap_initep_child;
     cap_initep_child.cnode = si->child_selfep.cnode;  // child_task_cnode
@@ -623,7 +632,7 @@ errval_t spawn_setup_ipc(struct spawninfo *si, struct waitset *ws, aos_recv_hand
     if (err_is_fail(err)) {
         debug_printf("error: %s\n", err_getstring(err));
     }
-    DEBUG_ERR_ON_FAIL(err, "registering receive slot for lmp channel\n");
+    DEBUG_ERR_ON_FAIL(err, "registering receive handler for lmp channel\n");
 
     return SYS_ERR_OK;
 }

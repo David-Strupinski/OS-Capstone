@@ -17,6 +17,7 @@
 #include <grading/grading.h>
 
 domainid_t global_pid;
+char global_retchar;
 struct capref global_retcap;
 size_t global_retbytes;
 
@@ -63,39 +64,17 @@ void ack_recv_handler(void *arg) {
         global_retcap = retcap;
         global_retbytes = msg.words[1];
         return;
+    } else if (msg.words[0] == GETCHAR_ACK) {
+        err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
+        // debug_printf("received char: %c\n", msg.words[1]);
+        global_retchar = msg.words[1];
+        return;
     }
     // debug_printf("received ack\n");
         
    // debug_printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
     while (err_is_fail(err)) {
         // debug_printf("\n\n\n\nthis actually ran (ack recv handler)\n\n\n\n\n");
-    }
-
-    err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-}
-
-
-void char_recv_handler(void *arg) {
-    // debug_printf("received char message\n");
-    struct lmp_recv_msg msg = LMP_RECV_MSG_INIT;
-    struct aos_rpc *rpc = arg;
-    errval_t err;
-    
-    err = lmp_chan_recv(rpc->lmp_chan, &msg, NULL);
-    
-    // debug_printf("char recv handler: msg words[0]: %d\n", msg.words[0]);
-    // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(char_recv_handler, arg));
-
-    if (msg.words[0] != GETCHAR) {
-        err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
-        // debug_printf("\n\n\n\n\n made it into this loop\n\n\n\n");
-        return;
-    }
-    // debug_printf("received char\n");
-        
-   // debug_printf("heres the address of rpc->waiting_on_ack from the ack pov: %p\n", &(rpc->waiting_on_ack));
-    while (err_is_fail(err)) {
-        // debug_printf("\n\n\n\nthis actually ran (char recv handler)\n\n\n\n\n");
     }
 
     err = lmp_chan_alloc_recv_slot(rpc->lmp_chan);
@@ -118,6 +97,9 @@ void char_recv_handler(void *arg) {
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc) {
     rpc->lmp_chan = malloc(sizeof(struct lmp_chan));
+    if (rpc->lmp_chan == NULL) {
+        return LIB_ERR_MALLOC_FAIL;
+    }
     lmp_chan_init(rpc->lmp_chan);
 
     return SYS_ERR_OK;
@@ -542,6 +524,8 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
     event_dispatch(get_default_waitset());
 
     // debug_printf("got char\n");
+
+    *retc = global_retchar;
 
     return SYS_ERR_OK;
 }
@@ -1096,12 +1080,11 @@ errval_t aos_rpc_proc_kill_all(struct aos_rpc *chan, const char *name)
  */
 struct aos_rpc *aos_rpc_get_init_channel(void)
 {
-    // TODO: Return channel to talk to init process
     errval_t        err;
     struct aos_rpc *rpc = global_rpc;
     // debug_printf("entered init channel\n");
 
-    //if (global_rpc == NULL) {
+    if (global_rpc == NULL) {
         // debug_printf("creating new aos_rpc channel\n");
         rpc = malloc(sizeof(struct aos_rpc));
         if (rpc == NULL) {
@@ -1111,7 +1094,7 @@ struct aos_rpc *aos_rpc_get_init_channel(void)
         aos_rpc_init(rpc);
 
         err = lmp_chan_accept(rpc->lmp_chan, DEFAULT_LMP_BUF_WORDS, cap_initep);
-    //}
+    }
 
     global_rpc = rpc;
     return rpc;

@@ -35,6 +35,7 @@ enum msg_type {
     STRING_MSG,
     PUTCHAR,
     GETCHAR,
+    GETCHAR_ACK,
     GET_RAM_CAP,
     SPAWN_CMDLINE,
     PID_ACK,

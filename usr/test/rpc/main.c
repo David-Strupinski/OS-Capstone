@@ -90,6 +90,33 @@ static void test_serial_rpc(void)
     grading_test_pass("R1-2", "test_basic_rpc\n");
 }
 
+static void test_serial_getchar(void)
+{
+    errval_t err;
+
+    grading_printf("test_serial_getchar()\n");
+
+    struct aos_rpc *serial_rpc = aos_rpc_get_serial_channel();
+    if (!serial_rpc) {
+        grading_test_fail("R1-5", "no serial_rpc channel set!\n");
+        return;
+    }
+
+    grading_printf("Enter some text: ");
+    char str[4];
+    for (size_t i = 0; i < 4; i++) {
+        err = aos_rpc_serial_getchar(serial_rpc, &str[i]);
+        if (err_is_fail(err)) {
+            grading_test_fail("R1-5", "failed to get char: %s\n", err_getstring(err));
+            return;
+        }
+    }
+
+    grading_printf("string: %s\n", str);
+
+    grading_test_pass("R1-5", "test_serial_getchar\n");
+}
+
 static bool check_cap_size(struct capref cap, size_t size)
 {
     errval_t err;
@@ -239,6 +266,7 @@ int main(int argc, char *argv[])
 
     test_basic_rpc();
     test_serial_rpc();
+    test_serial_getchar();
     test_memory_rpc();
     test_spawn_rpc();
 

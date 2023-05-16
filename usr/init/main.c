@@ -174,7 +174,9 @@ void gen_recv_handler(void *arg)
             while (err_is_fail(err)) {
                 USER_PANIC_ERR(err, "registering receive handler\n");
             }
-            char c = getchar();
+
+            char c;
+            sys_getchar(&c);
             grading_rpc_handler_serial_getchar();
 
             // build getchar response message payload
@@ -183,6 +185,13 @@ void gen_recv_handler(void *arg)
             num_payload->val = c;
 
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_char_handler, (void*) num_payload));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, err_getstring(err));
+                return;
+            }
+
+            event_dispatch(get_default_waitset());
+            event_dispatch(get_default_waitset());
 
             break;
 
@@ -449,14 +458,14 @@ void send_char_handler(void *arg)
     struct lmp_chan *chan = rpc->lmp_chan;
     char c = payload->val;
     errval_t err;
-    err = lmp_chan_send2(chan, 0, NULL_CAP, GETCHAR, c);
+    err = lmp_chan_send2(chan, 0, NULL_CAP, GETCHAR_ACK, c);
     if (err_is_fail(err)) {
         USER_PANIC_ERR(err, "failed sending char\n");
     }
 
     free(payload);
 
-    debug_printf("char sent\n");
+    debug_printf("char sent: %c\n", c);
 }
 
 void send_pid_handler(void *arg) {

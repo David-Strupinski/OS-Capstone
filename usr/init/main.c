@@ -20,6 +20,7 @@
 #include <aos/paging.h>
 #include <aos/waitset.h>
 #include <aos/aos_rpc.h>
+#include <aos/kernel_cap_invocations.h>
 #include <mm/mm.h>
 #include <grading/grading.h>
 #include <grading/io.h>
@@ -543,7 +544,7 @@ bsp_main(int argc, char *argv[]) {
         USER_PANIC_ERR(err, "initialize_ram_alloc");
     }
 
-    // TODO: initialize mem allocator, vspace management here
+    // initialize mem allocator, vspace management here
 
     // calling early grading tests, required functionality up to here:
     //   - allocate memory
@@ -571,10 +572,10 @@ bsp_main(int argc, char *argv[]) {
             return LIB_ERR_NOT_IMPLEMENTED;
     }
     if (err_is_fail(err)) {
-        // DEBUG_ERR(err, "Booting second core failed. Continuing.\n");
+        DEBUG_ERR(err, "Booting second core failed. Continuing.\n");
     }
 
-    // TODO: Spawn system processes, boot second core etc. here
+    // Spawn system processes, boot second core etc. here
 
     // calling late grading tests, required functionality up to here:
     //   - full functionality of the system
@@ -601,9 +602,37 @@ app_main(int argc, char *argv[]) {
     (void)argv;
 
     errval_t err;
-    // TODO (M5):
-    //   - initialize memory allocator etc.
-    //   - obtain a pointer to the bootinfo structure on the appcore!
+                   
+    // Create the elf module root cnode
+    struct capref module_cnode_cslot = {
+        .cnode = cnode_root,
+        .slot = ROOTCN_SLOT_MODULECN
+    };
+    struct cnoderef module_cnode_ref;
+    err = cnode_create_raw(module_cnode_cslot, &module_cnode_ref,
+                           ObjType_L2CNode, L2_CNODE_SLOTS);
+    DEBUG_ERR_ON_FAIL(err, "failed to create elf module root on new core");
+
+    // Get urpc frame
+    void* urpc_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &urpc_buf, BASE_PAGE_SIZE, cap_urpc, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "app_main: couldn't map urpc frame\n");
+
+    bi = (struct bootinfo*) urpc_buf;           // janky bootinfo struct with only 1 region
+
+    // Forge cap to ram
+    struct capref ram_cap = {
+        .cnode = cnode_memory,
+        .slot = 0
+    };
+    err = ram_forge(ram_cap, bi->regions[0].mr_base, bi->regions[0].mr_bytes, my_core_id);
+    DEBUG_ERR_ON_FAIL(err, "couldn't download ram from other core\n");
+
+    // Init the mem allocator
+    err = initialize_ram_alloc(bi);
+    if(err_is_fail(err)){
+        USER_PANIC_ERR(err, "initialize_ram_alloc");
+    }
 
     // initialize the grading/testing subsystem
     // DO NOT REMOVE THE FOLLOWING LINE!

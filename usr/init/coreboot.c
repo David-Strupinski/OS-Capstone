@@ -12,6 +12,7 @@
 
 #define ARMv8_KERNEL_OFFSET 0xffff000000000000
 
+#define NEW_CORE_MEM_SZ 1024 * 1024 * 256     // 256 mib
 
 extern struct platform_info platform_info;
 extern struct bootinfo     *bi;
@@ -409,13 +410,16 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
 
     // allocate space for the URPC frame
     struct armv8_coredata_memreg urpc_mem;
-    struct capref urpc_ram;
-    err = ram_alloc(&urpc_ram, BASE_PAGE_SIZE);
+    struct capref urpc_frame;
+    err = frame_alloc(&urpc_frame, BASE_PAGE_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to urpc frame\n");
     struct capability urpc_cap;
-    err = cap_direct_identify(urpc_ram, &urpc_cap);
-    urpc_mem.base = urpc_cap.u.ram.base;
-    urpc_mem.length = urpc_cap.u.ram.bytes;
+    void *urpc_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &urpc_buf, BASE_PAGE_SIZE, urpc_frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map urpc frame\n");
+    err = cap_direct_identify(urpc_frame, &urpc_cap);
+    urpc_mem.base = urpc_cap.u.frame.base;
+    urpc_mem.length = urpc_cap.u.frame.bytes;
     debug_printf("urpc base: %p size %lu\n", urpc_mem.base, urpc_mem.length);
 
     // set the fields of the core data struct
@@ -449,6 +453,48 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     
     // vscode doesn't like this cast, but the compiler requires it
     cpu_dcache_wbinv_range((vm_offset_t)cd_buf, BASE_PAGE_SIZE);
+
+
+    // ===========================================================================================
+    /* Pseudocode for assigning mem to new core:
+     * 1. ram alloc 256 mb
+     * 2. init new bootinfo struct for other core
+     * 3. pass into urpc frame, cache flush
+     * 4. read it in app_main
+     * 5. forge capabilities
+     * 6. add to core's memory mgr
+     */
+    // ============================================================================================
+    
+    // Ram alloc 256 mb
+    struct capref new_core_mem;
+    err = ram_alloc(&new_core_mem, NEW_CORE_MEM_SZ);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate ram for new core\n");
+
+    struct capability new_core_mem_cap;
+    err = cap_direct_identify(new_core_mem, &new_core_mem_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't get cap for ram that was meant for new core\n");
+
+    // Init new bootinfo struct for other core
+    struct mem_region new_mem_region = {
+        .mr_base = new_core_mem_cap.u.ram.base,
+        .mr_type = RegionType_Empty,
+        .mr_bytes = new_core_mem_cap.u.ram.bytes,
+        .mr_consumed = 0,
+        .mrmod_size = 0,
+        .mrmod_data = 0,
+        .mrmod_slot = 0,
+    };
+    struct bootinfo* new_core_bootinfo = (struct bootinfo*) malloc(sizeof(struct bootinfo) +
+                                                                   sizeof(struct mem_region));
+    new_core_bootinfo->regions[0] = new_mem_region;
+    new_core_bootinfo->regions_length = 1;
+    new_core_bootinfo->mem_spawn_core = bi->mem_spawn_core;
+
+    // Pass into urpc frame, cache flush
+    memcpy(urpc_buf, new_core_bootinfo, sizeof(struct bootinfo) + sizeof(struct mem_region));
+    cpu_dcache_wbinv_range((vm_offset_t)urpc_buf, BASE_PAGE_SIZE);
+    free(new_core_bootinfo);
 
     // ============================================================================================
     // Call the invoke_monitor_spawn_core with the entry point

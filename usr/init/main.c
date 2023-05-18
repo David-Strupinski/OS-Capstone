@@ -32,7 +32,6 @@
 
 #include "proc_mgmt.h"
 
-
 void gen_recv_handler(void *arg)
 {
     // debug_printf("received message\n");

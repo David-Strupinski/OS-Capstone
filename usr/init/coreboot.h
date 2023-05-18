@@ -39,7 +39,6 @@ struct corestatus {
     const char *init;
 };
 
-
 /**
  * @brief boots a new core with the provided mpid
  *

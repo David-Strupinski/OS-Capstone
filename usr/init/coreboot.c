@@ -16,6 +16,8 @@
 
 extern struct platform_info platform_info;
 extern struct bootinfo     *bi;
+const char *global_cpu_driver;
+const char *global_init;
 
 struct mem_info {
     size_t   size;       // Size in bytes of the memory region
@@ -201,15 +203,10 @@ __attribute__((__used__)) static errval_t relocate_elf(genvaddr_t binary, struct
 errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cpu_driver,
                             const char *init, coreid_t *core)
 {
-    // make compiler happy about unused parameters
-    (void)init;
-    (void)boot_driver;
-    (void)cpu_driver;
-    // make compiler happy about unused parameters
-    (void)core;
-    (void)mpid;
-
     errval_t err;
+
+    global_cpu_driver = cpu_driver;
+    global_init = init;
 
     // ============================================================================================
     // Get a new KCB by retyping a RAM cap to ObjType_KernelControlBlock.
@@ -643,7 +640,7 @@ errval_t coreboot_resume_core(coreid_t core)
 errval_t coreboot_get_num_cores(coreid_t *num_cores)
 {
     // TODO: change me with multicore support!
-    *num_cores = 1;
+    *num_cores = 4;
     return SYS_ERR_OK;
 }
 
@@ -658,9 +655,10 @@ errval_t coreboot_get_num_cores(coreid_t *num_cores)
  */
 errval_t coreboot_get_core_status(coreid_t core, struct corestatus *status)
 {
-    (void)core;
-    (void)status;
-    // TODO: obtain the status of the core.
-    USER_PANIC("Not implemented");
+    status->core = core;
+    status->cpudriver = global_cpu_driver;
+    status->init = global_init;
+    status->mpid = core;
+    status->state = CORE_STATE_RUNNING;
     return LIB_ERR_NOT_IMPLEMENTED;
 }

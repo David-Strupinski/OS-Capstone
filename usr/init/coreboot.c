@@ -475,6 +475,11 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     err = cap_direct_identify(new_core_mem, &new_core_mem_cap);
     DEBUG_ERR_ON_FAIL(err, "couldn't get cap for ram that was meant for new core\n");
 
+    // Get capability to module strings
+    struct capability mod_strings_cap;
+    err = cap_direct_identify(cap_mmstrings, &mod_strings_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't get cap for module strings\n");
+
     // Init new bootinfo struct for other core
     struct mem_region new_mem_region = {
         .mr_base = new_core_mem_cap.u.ram.base,
@@ -485,14 +490,37 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
         .mrmod_data = 0,
         .mrmod_slot = 0,
     };
-    struct bootinfo* new_core_bootinfo = (struct bootinfo*) malloc(sizeof(struct bootinfo) +
-                                                                   sizeof(struct mem_region));
+    
+    // Count all elf mem module regions
+    int module_counter = 0;
+    for (int i = 0; i < (int) bi->regions_length; i++) {
+        if (bi->regions[i].mr_type == RegionType_Module) {
+            module_counter++;
+        }
+    }
+
+    int bootinfo_size = sizeof(struct bootinfo) + ((module_counter + 1) * sizeof(struct mem_region));
+    struct bootinfo* new_core_bootinfo = (struct bootinfo*) malloc(bootinfo_size);
     new_core_bootinfo->regions[0] = new_mem_region;
-    new_core_bootinfo->regions_length = 1;
+    new_core_bootinfo->regions_length = module_counter + 1;
     new_core_bootinfo->mem_spawn_core = bi->mem_spawn_core;
 
+    for (int i = 0; i < (int) bi->regions_length; i++) {
+        if (bi->regions[i].mr_type == RegionType_Module) {
+            new_core_bootinfo->regions[i].mr_base = bi->regions[i].mr_base;
+            new_core_bootinfo->regions[i].mr_type = RegionType_Module,
+            new_core_bootinfo->regions[i].mr_bytes = bi->regions[i].mr_bytes;
+            new_core_bootinfo->regions[i].mr_consumed = bi->regions[i].mr_consumed; // <-- Is this right?
+            new_core_bootinfo->regions[i].mrmod_size = bi->regions[i].mrmod_size;
+            new_core_bootinfo->regions[i].mrmod_data = bi->regions[i].mrmod_data;
+            new_core_bootinfo->regions[i].mrmod_slot = bi->regions[i].mrmod_slot;
+        }
+    }
+
     // Pass into urpc frame, cache flush
-    memcpy(urpc_buf, new_core_bootinfo, sizeof(struct bootinfo) + sizeof(struct mem_region));
+    memcpy(urpc_buf, new_core_bootinfo, bootinfo_size);
+    memcpy(urpc_buf + bootinfo_size, &(mod_strings_cap.u.frame.base), sizeof(genpaddr_t));
+    memcpy(urpc_buf + bootinfo_size + sizeof(genpaddr_t), &(mod_strings_cap.u.frame.bytes), sizeof(gensize_t));
     cpu_dcache_wbinv_range((vm_offset_t)urpc_buf, BASE_PAGE_SIZE);
     free(new_core_bootinfo);
 

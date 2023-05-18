@@ -628,6 +628,22 @@ app_main(int argc, char *argv[]) {
     err = ram_forge(ram_cap, bi->regions[0].mr_base, bi->regions[0].mr_bytes, my_core_id);
     DEBUG_ERR_ON_FAIL(err, "couldn't download ram from other core\n");
 
+    // Forge caps to every module
+    for (int i = 1; i < (int) bi->regions_length; i++) {
+        struct capref module_cap = {
+            .cnode = cnode_module,
+            .slot = bi->regions[i].mrmod_slot,
+        };
+        err = frame_forge(module_cap, bi->regions[i].mr_base, bi->regions[i].mr_bytes, my_core_id);
+        DEBUG_ERR_ON_FAIL(err, "couldn't forge cap to module\n");
+    }
+
+    // Forge cap to module strings
+    genpaddr_t* base = urpc_buf + sizeof(struct bootinfo) + ((bi->regions_length) * sizeof(struct mem_region));
+    gensize_t* bytes = urpc_buf + sizeof(struct bootinfo) + ((bi->regions_length) * sizeof(struct mem_region)) + sizeof(genpaddr_t);
+    err = frame_forge(cap_mmstrings, *base, *bytes, my_core_id);
+    DEBUG_ERR_ON_FAIL(err, "couldn't download module strings from other core\n");
+
     // Init the mem allocator
     err = initialize_ram_alloc(bi);
     if(err_is_fail(err)){

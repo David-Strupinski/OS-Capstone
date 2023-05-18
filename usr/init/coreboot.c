@@ -418,13 +418,12 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     urpc_mem.length = urpc_cap.u.ram.bytes;
     debug_printf("urpc base: %p size %lu\n", urpc_mem.base, urpc_mem.length);
 
-    
     // set the fields of the core data struct
     cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;
     cd->cpu_driver_stack = ram_cap.u.ram.base + ram_cap.u.ram.bytes;
     cd->cpu_driver_stack_limit = ram_cap.u.ram.base;
-    cd->cpu_driver_entry = cpu_reloc_entry_point;
-    memset(&cd->cpu_driver_cmdline, 0, 128);
+    cd->cpu_driver_entry = cpu_reloc_entry_point + ARMv8_KERNEL_OFFSET;
+    memset(cd->cpu_driver_cmdline, 0, 128);
     cd->memory = init_mem;
     cd->urpc_frame = urpc_mem;
     cd->monitor_binary = monitor_binary;

@@ -557,14 +557,18 @@ bsp_main(int argc, char *argv[]) {
     switch (platform_info.platform) {
         case PI_PLATFORM_IMX8X: {
             // SPAWN THE SECOND CORE on the IMX8X baord
-            hwid_t mpid = 1;
-            err = coreboot_boot_core(mpid, "boot_armv8_generic", "cpu_imx8x", "init", NULL);
+            err = coreboot_boot_core(1, "boot_armv8_generic", "cpu_imx8x", "init", NULL);
+            err = coreboot_boot_core(2, "boot_armv8_generic", "cpu_imx8x", "init", NULL);
+            err = coreboot_boot_core(3, "boot_armv8_generic", "cpu_imx8x", "init", NULL);
+
             break;
         }
         case PI_PLATFORM_QEMU: {
             // SPAWN THE SECOND CORE on QEMU
-            hwid_t mpid = 1;
-            err = coreboot_boot_core(mpid, "boot_armv8_generic", "cpu_a57_qemu", "init", NULL);
+            err = coreboot_boot_core(1, "boot_armv8_generic", "cpu_a57_qemu", "init", NULL);
+            err = coreboot_boot_core(2, "boot_armv8_generic", "cpu_a57_qemu", "init", NULL);
+            err = coreboot_boot_core(3, "boot_armv8_generic", "cpu_a57_qemu", "init", NULL);
+
             break;
         }
         default:

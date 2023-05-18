@@ -635,14 +635,15 @@ app_main(int argc, char *argv[]) {
             .slot = bi->regions[i].mrmod_slot,
         };
         //debug_printf("module %d: addr %p, %d bytes\n", i, bi->regions[i].mr_base, bi->regions[i].mrmod_size);
-        err = frame_forge(module_cap, bi->regions[i].mr_base, bi->regions[i].mrmod_size, my_core_id);
+        err = frame_forge(module_cap, bi->regions[i].mr_base, 
+                          ROUND_UP(bi->regions[i].mrmod_size, BASE_PAGE_SIZE), my_core_id);
         DEBUG_ERR_ON_FAIL(err, "couldn't forge cap to module\n");
     }
 
     // Forge cap to module strings
     genpaddr_t* base = urpc_buf + sizeof(struct bootinfo) + ((bi->regions_length) * sizeof(struct mem_region));
     gensize_t* bytes = urpc_buf + sizeof(struct bootinfo) + ((bi->regions_length) * sizeof(struct mem_region)) + sizeof(genpaddr_t);
-    err = frame_forge(cap_mmstrings, *base, *bytes, my_core_id);
+    err = frame_forge(cap_mmstrings, *base, ROUND_UP(*bytes, BASE_PAGE_SIZE), my_core_id);
     DEBUG_ERR_ON_FAIL(err, "couldn't download module strings from other core\n");
 
     // Init the mem allocator

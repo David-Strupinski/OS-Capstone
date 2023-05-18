@@ -634,7 +634,8 @@ app_main(int argc, char *argv[]) {
             .cnode = cnode_module,
             .slot = bi->regions[i].mrmod_slot,
         };
-        err = frame_forge(module_cap, bi->regions[i].mr_base, bi->regions[i].mr_bytes, my_core_id);
+        //debug_printf("module %d: addr %p, %d bytes\n", i, bi->regions[i].mr_base, bi->regions[i].mrmod_size);
+        err = frame_forge(module_cap, bi->regions[i].mr_base, bi->regions[i].mrmod_size, my_core_id);
         DEBUG_ERR_ON_FAIL(err, "couldn't forge cap to module\n");
     }
 

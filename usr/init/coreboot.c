@@ -502,15 +502,16 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     new_core_bootinfo->regions_length = module_counter + 1;
     new_core_bootinfo->mem_spawn_core = bi->mem_spawn_core;
 
-    for (int i = 0; i < (int) bi->regions_length; i++) {
+    for (int i = 0, j = 1; i < (int) bi->regions_length; i++) {
         if (bi->regions[i].mr_type == RegionType_Module) {
-            new_core_bootinfo->regions[i].mr_base = bi->regions[i].mr_base;
-            new_core_bootinfo->regions[i].mr_type = RegionType_Module,
-            new_core_bootinfo->regions[i].mr_bytes = bi->regions[i].mr_bytes;
-            new_core_bootinfo->regions[i].mr_consumed = bi->regions[i].mr_consumed; // <-- Is this right?
-            new_core_bootinfo->regions[i].mrmod_size = bi->regions[i].mrmod_size;
-            new_core_bootinfo->regions[i].mrmod_data = bi->regions[i].mrmod_data;
-            new_core_bootinfo->regions[i].mrmod_slot = bi->regions[i].mrmod_slot;
+            new_core_bootinfo->regions[j].mr_base = bi->regions[i].mr_base;
+            new_core_bootinfo->regions[j].mr_type = RegionType_Module,
+            new_core_bootinfo->regions[j].mr_bytes = bi->regions[i].mr_bytes;
+            new_core_bootinfo->regions[j].mr_consumed = bi->regions[i].mr_consumed; // <-- Is this right?
+            new_core_bootinfo->regions[j].mrmod_size = bi->regions[i].mrmod_size;
+            new_core_bootinfo->regions[j].mrmod_data = bi->regions[i].mrmod_data;
+            new_core_bootinfo->regions[j].mrmod_slot = bi->regions[i].mrmod_slot;
+            j++;
         }
     }
 

@@ -16,6 +16,7 @@
 
 extern struct platform_info platform_info;
 extern struct bootinfo     *bi;
+extern genvaddr_t global_urpc_frames[4];
 const char *global_cpu_driver;
 const char *global_init;
 
@@ -414,6 +415,7 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     void *urpc_buf;
     err = paging_map_frame_attr(get_current_paging_state(), &urpc_buf, BASE_PAGE_SIZE, urpc_frame, VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "couldn't map urpc frame\n");
+    global_urpc_frames[(uint64_t)mpid] = (genvaddr_t)urpc_buf;
     err = cap_direct_identify(urpc_frame, &urpc_cap);
     urpc_mem.base = urpc_cap.u.frame.base;
     urpc_mem.length = urpc_cap.u.frame.bytes;

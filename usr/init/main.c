@@ -525,6 +525,9 @@ struct bootinfo *bi;
 coreid_t my_core_id;
 struct platform_info platform_info;
 
+// store pointers to the URPC frames for the other three cores (BSP only)
+genvaddr_t global_urpc_frames[4];
+
 static int
 bsp_main(int argc, char *argv[]) {
     errval_t err;
@@ -579,6 +582,11 @@ bsp_main(int argc, char *argv[]) {
     }
 
     // Spawn system processes, boot second core etc. here
+
+    // print out the URPC frames for other cores
+    for (int i = 0; i < 4; i++) {
+        debug_printf("core %d URPC buffer: %p\n", i, global_urpc_frames[i]);
+    }
 
     // calling late grading tests, required functionality up to here:
     //   - full functionality of the system

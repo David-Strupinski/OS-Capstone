@@ -589,7 +589,13 @@ bsp_main(int argc, char *argv[]) {
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
-        err = event_dispatch(default_ws);
+        while ((err = event_dispatch_non_block(default_ws)) == LIB_ERR_NO_EVENT) {
+            // dispatch on URPC
+            genvaddr_t urpc_base = (genvaddr_t) bi;
+            (void)urpc_base;
+
+            thread_yield_dispatcher(NULL_CAP);  // runs slow without this
+        }
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();
@@ -681,7 +687,13 @@ app_main(int argc, char *argv[]) {
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
-        err = event_dispatch(default_ws);
+        while ((err = event_dispatch_non_block(default_ws)) == LIB_ERR_NO_EVENT) {
+            // dispatch on URPC
+            genvaddr_t urpc_base = (genvaddr_t) bi;
+            (void)urpc_base;
+
+            thread_yield_dispatcher(NULL_CAP);  // runs slow without this
+        }
         if (err_is_fail(err)) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();

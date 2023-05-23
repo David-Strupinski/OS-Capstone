@@ -105,6 +105,70 @@ errval_t aos_rpc_init(struct aos_rpc *rpc) {
     return SYS_ERR_OK;
 }
 
+errval_t ump_chan_init(struct ump_chan *chan, genvaddr_t base, size_t size) {
+    chan->base = base;
+    chan->size = size;
+    chan->send_tx = base;
+    chan->ack_tx = base;
+    chan->recv_rx = base + sizeof(struct cache_line) - sizeof(uint32_t);
+
+    return SYS_ERR_OK;
+}
+
+errval_t ump_enqueue(struct ump_chan *chan, char *buf, size_t size) {
+    if (size > 60) {
+        USER_PANIC("size too big");
+    }
+
+    // zero out valid bytes in cache line
+    memset((void *) chan->send_tx, 0, sizeof(struct cache_line));
+
+    // copy data into cache line
+    memcpy((void *) chan->send_tx, buf, size);
+
+    // set valid flag
+    struct cache_line *cl = (struct cache_line *) chan->send_tx;
+    cl->valid = 1;
+
+    // advance send_tx pointer to next available cache line in circular buffer
+    if (chan->send_tx + sizeof(struct cache_line) >= chan->base + chan->size) {
+        chan->send_tx = chan->base;
+    } else {
+        chan->send_tx += sizeof(struct cache_line);
+    }
+
+    // check if buffer is full
+    if (chan->send_tx == chan->ack_tx) {
+        return LIB_ERR_UMP_CHAN_FULL;
+    }
+
+    // move recv_rx to flag region of send_tx's cache line
+    chan->recv_rx = chan->send_tx + sizeof(struct cache_line) - sizeof(uint32_t);
+
+    return SYS_ERR_OK;
+}
+
+errval_t ump_dequeue(struct ump_chan *chan, char **buf, size_t *size) {
+    // cast ack_tx to cache line
+    struct cache_line *cl = (struct cache_line *) chan->ack_tx;
+
+    if (cl->valid == 0) {
+        return LIB_ERR_NO_UMP_MSG;
+    }
+
+    // copy data from cache line into buf
+    *size = 60;
+    memcpy(*buf, cl->buf, *size);  // TODO: eventually don't copy???
+
+    // move ack_tx to next cache line in circular buffer
+    if (chan->ack_tx + sizeof(struct cache_line) >= chan->base + chan->size) {
+        chan->ack_tx = chan->base;
+    } else {
+        chan->ack_tx += sizeof(struct cache_line);
+    }
+
+    return SYS_ERR_OK;
+}
 
 static void send_num_handler(void *arg)
 {

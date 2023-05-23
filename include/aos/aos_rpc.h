@@ -59,6 +59,25 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
  * Note: the RPC binding should work over LMP (M4) or UMP (M6)
  */
 
+// circular buffer for UMP messaging in a URPC frame
+struct ump_chan {
+    genvaddr_t base;  // base address of the circular buffer
+    size_t size;      // size of the circular buffer
+    genvaddr_t send_tx;  // head/sender ptr
+    genvaddr_t ack_tx;  // tail/ack ptr
+    genvaddr_t recv_rx;  // recv ptr (last 4 bytes of cache line)
+};
+
+// circular ump chan buffer functions
+errval_t ump_enqueue(struct ump_chan *chan, char *buf, size_t size);
+
+errval_t ump_dequeue(struct ump_chan *chan, char **buf, size_t *size);
+
+struct cache_line {
+    char buf[60];
+    uint32_t valid;
+};
+
 struct aos_rpc {
     struct lmp_chan *lmp_chan;
     domainid_t pid;
@@ -152,6 +171,8 @@ void pid_recv_handler(void* arg);
  * @returns SYS_ERR_OK on success, or error value on failure
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc);
+
+errval_t ump_chan_init(struct ump_chan *chan, genvaddr_t base, size_t size);
 
 
 

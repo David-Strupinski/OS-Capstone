@@ -528,6 +528,16 @@ struct platform_info platform_info;
 // store pointers to the URPC frames for the other three cores (BSP only)
 genvaddr_t global_urpc_frames[4];
 
+// create circular buffers for UMP messaging between all cores and the BSP
+struct ump_chan ump_mon_to_core_1;
+struct ump_chan ump_mon_to_core_2;
+struct ump_chan ump_mon_to_core_3;
+
+struct ump_chan ump_core_1_to_mon;
+struct ump_chan ump_core_2_to_mon;
+struct ump_chan ump_core_3_to_mon;
+
+
 static int
 bsp_main(int argc, char *argv[]) {
     errval_t err;
@@ -582,6 +592,13 @@ bsp_main(int argc, char *argv[]) {
     }
 
     // Spawn system processes, boot second core etc. here
+    ump_chan_init(&ump_mon_to_core_1, global_urpc_frames[1], BASE_PAGE_SIZE);
+    ump_chan_init(&ump_mon_to_core_2, global_urpc_frames[2], BASE_PAGE_SIZE);
+    ump_chan_init(&ump_mon_to_core_3, global_urpc_frames[3], BASE_PAGE_SIZE);
+
+    ump_chan_init(&ump_core_1_to_mon, global_urpc_frames[1] + BASE_PAGE_SIZE, BASE_PAGE_SIZE);
+    ump_chan_init(&ump_core_2_to_mon, global_urpc_frames[2] + BASE_PAGE_SIZE, BASE_PAGE_SIZE);
+    ump_chan_init(&ump_core_3_to_mon, global_urpc_frames[3] + BASE_PAGE_SIZE, BASE_PAGE_SIZE);
 
     // print out the URPC frames for other cores
     for (int i = 0; i < 4; i++) {
@@ -597,17 +614,16 @@ bsp_main(int argc, char *argv[]) {
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
-        while ((err = event_dispatch_non_block(default_ws)) == LIB_ERR_NO_EVENT) {
-            // dispatch on URPC
-            genvaddr_t urpc_base = (genvaddr_t) bi;
-            (void)urpc_base;
+        err = event_dispatch_non_block(default_ws);
 
-            thread_yield_dispatcher(NULL_CAP);  // runs slow without this
-        }
-        if (err_is_fail(err)) {
+        if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();
         }
+
+        // dispatch on URPC
+        genvaddr_t urpc_base = (genvaddr_t) bi;
+        (void)urpc_base;
     }
 
     return EXIT_SUCCESS;
@@ -695,17 +711,15 @@ app_main(int argc, char *argv[]) {
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
-        while ((err = event_dispatch_non_block(default_ws)) == LIB_ERR_NO_EVENT) {
-            // dispatch on URPC
-            genvaddr_t urpc_base = (genvaddr_t) bi;
-            (void)urpc_base;
+        err = event_dispatch_non_block(default_ws);
 
-            thread_yield_dispatcher(NULL_CAP);  // runs slow without this
-        }
-        if (err_is_fail(err)) {
+        if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();
         }
+
+        // TODO (M6): handle URPC messages
+        // err = urpc_poll_once();
     }
 
     return EXIT_SUCCESS;

@@ -20,6 +20,7 @@
 #include <stdlib.h>
 
 #include <aos/aos.h>
+#include <aos/aos_rpc.h>
 #include <spawn/spawn.h>
 #include <spawn/multiboot.h>
 #include <spawn/elfimg.h>
@@ -181,6 +182,17 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     (void)pid;
 
     // Note: With multicore support, you many need to send a message to the other core
+    if (core != my_core_id) {  // TODO: do
+        // send message to other core
+
+        // send spawn message to URPC frame
+
+
+        // wait for ack (blocking), sets pid
+
+
+        return SYS_ERR_OK;
+    }
     
     // parse command line properly
     const char *argv[MAX_CMDLINE_ARGS];

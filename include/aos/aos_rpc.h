@@ -62,19 +62,17 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
 // circular buffer for UMP messaging in a URPC frame
 struct ump_chan {
     genvaddr_t base;  // base address of the circular buffer
-    size_t size;      // size of the circular buffer
-    genvaddr_t send_tx;  // head/sender ptr
-    genvaddr_t ack_tx;  // tail/ack ptr
-    genvaddr_t recv_rx;  // recv ptr (last 4 bytes of cache line)
+    size_t head;  // head/sender offset
+    size_t tail;  // tail/ack offset
 };
 
 // circular ump chan buffer functions
-errval_t ump_enqueue(struct ump_chan *chan, char *buf, size_t size);
+errval_t ump_send(struct ump_chan *chan, char *buf, size_t size);
 
-errval_t ump_dequeue(struct ump_chan *chan, char **buf, size_t *size);
+errval_t ump_receive(struct ump_chan *chan);
 
 struct cache_line {
-    char buf[60];
+    char payload[60];
     uint32_t valid;
 };
 
@@ -172,7 +170,7 @@ void pid_recv_handler(void* arg);
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc);
 
-errval_t ump_chan_init(struct ump_chan *chan, genvaddr_t base, size_t size);
+errval_t ump_chan_init(struct ump_chan *chan, genvaddr_t base);
 
 
 

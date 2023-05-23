@@ -393,7 +393,6 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     struct armv8_coredata_memreg monitor_binary;
     monitor_binary.base = init_mr->mr_base;
     monitor_binary.length = init_mr->mrmod_size;
-    debug_printf("init binary base: %p size %lu\n", monitor_binary.base, monitor_binary.length);
 
     // allocate some space to load the init process
     struct armv8_coredata_memreg init_mem;
@@ -404,22 +403,20 @@ errval_t coreboot_boot_core(hwid_t mpid, const char *boot_driver, const char *cp
     err = cap_direct_identify(init_ram, &init_cap);
     init_mem.base = init_cap.u.ram.base;
     init_mem.length = init_cap.u.ram.bytes;
-    debug_printf("init mem base: %p size %lu\n", init_mem.base, init_mem.length);
 
-    // allocate space for the URPC frame
+    // allocate space (3 pages) for the URPC frame
     struct armv8_coredata_memreg urpc_mem;
     struct capref urpc_frame;
-    err = frame_alloc(&urpc_frame, BASE_PAGE_SIZE, NULL);
+    err = frame_alloc(&urpc_frame, 3 * BASE_PAGE_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate space to urpc frame\n");
     struct capability urpc_cap;
     void *urpc_buf;
-    err = paging_map_frame_attr(get_current_paging_state(), &urpc_buf, BASE_PAGE_SIZE, urpc_frame, VREGION_FLAGS_READ_WRITE);
+    err = paging_map_frame_attr(get_current_paging_state(), &urpc_buf, 3 * BASE_PAGE_SIZE, urpc_frame, VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "couldn't map urpc frame\n");
     global_urpc_frames[(uint64_t)mpid] = (genvaddr_t)urpc_buf;
     err = cap_direct_identify(urpc_frame, &urpc_cap);
     urpc_mem.base = urpc_cap.u.frame.base;
     urpc_mem.length = urpc_cap.u.frame.bytes;
-    debug_printf("urpc base: %p size %lu\n", urpc_mem.base, urpc_mem.length);
 
     // set the fields of the core data struct
     cd->boot_magic = ARMV8_BOOTMAGIC_PSCI;

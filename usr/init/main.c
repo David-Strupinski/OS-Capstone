@@ -528,15 +528,14 @@ struct platform_info platform_info;
 // store pointers to the URPC frames for the other three cores (BSP only)
 genvaddr_t global_urpc_frames[4];
 
-// create circular buffers for UMP messaging between all cores and the BSP
-struct ump_chan ump_mon_to_core_1;
-struct ump_chan ump_mon_to_core_2;
-struct ump_chan ump_mon_to_core_3;
-
-struct ump_chan ump_core_1_to_mon;
-struct ump_chan ump_core_2_to_mon;
-struct ump_chan ump_core_3_to_mon;
-
+// get the correct struct ump_chan
+// direction == 0: core -> monitor
+// direction == 1: monitor -> core
+static inline struct ump_chan *get_ump_chan(coreid_t core, int direction) {
+    // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
+    return (struct ump_chan *)(global_urpc_frames[core] + 
+            BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
+}
 
 static int
 bsp_main(int argc, char *argv[]) {
@@ -592,23 +591,24 @@ bsp_main(int argc, char *argv[]) {
     }
 
     // Spawn system processes, boot second core etc. here
-    ump_chan_init(&ump_mon_to_core_1, global_urpc_frames[1], BASE_PAGE_SIZE);
-    ump_chan_init(&ump_mon_to_core_2, global_urpc_frames[2], BASE_PAGE_SIZE);
-    ump_chan_init(&ump_mon_to_core_3, global_urpc_frames[3], BASE_PAGE_SIZE);
 
-    ump_chan_init(&ump_core_1_to_mon, global_urpc_frames[1] + BASE_PAGE_SIZE, BASE_PAGE_SIZE);
-    ump_chan_init(&ump_core_2_to_mon, global_urpc_frames[2] + BASE_PAGE_SIZE, BASE_PAGE_SIZE);
-    ump_chan_init(&ump_core_3_to_mon, global_urpc_frames[3] + BASE_PAGE_SIZE, BASE_PAGE_SIZE);
-
-    // print out the URPC frames for other cores
-    for (int i = 0; i < 4; i++) {
-        debug_printf("core %d URPC buffer: %p\n", i, global_urpc_frames[i]);
+    // initialize UMP channels
+    for (int i = 1; i < 4; i++) {
+        ump_chan_init(get_ump_chan(i, 0), global_urpc_frames[i] + BASE_PAGE_SIZE);
+        ump_chan_init(get_ump_chan(i, 1), global_urpc_frames[i] + 2 * BASE_PAGE_SIZE);
     }
 
     // calling late grading tests, required functionality up to here:
     //   - full functionality of the system
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
+
+    // try to send ourselves a message over UMP real quick
+    // TODO: remove this
+    ump_receive(get_ump_chan(1, 0));
+    ump_send(get_ump_chan(1, 0), "hi there!", 10);
+    ump_receive(get_ump_chan(1, 0));
+
 
     debug_printf("Message handler loop\n");
     // Hang around

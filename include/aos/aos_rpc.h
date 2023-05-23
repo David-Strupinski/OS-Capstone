@@ -59,6 +59,19 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
  * Note: the RPC binding should work over LMP (M4) or UMP (M6)
  */
 
+// store pointers to the URPC frames for the other three cores (BSP only)
+// genvaddr_t global_urpc_frames[4];
+
+// get the correct struct ump_chan on the monitor
+// direction == 0: core -> monitor
+// direction == 1: monitor -> core
+struct ump_chan *get_ump_chan_mon(coreid_t core, int direction);
+
+// get the correct struct ump_chan for a core
+// direction == 0: core -> monitor
+// direction == 1: monitor -> core
+struct ump_chan *get_ump_chan_core(int direction);
+
 // circular buffer for UMP messaging in a URPC frame
 struct ump_chan {
     size_t base;  // offset of base from struct ump_chan
@@ -69,11 +82,16 @@ struct ump_chan {
 // circular ump chan buffer functions
 errval_t ump_send(struct ump_chan *chan, char *buf, size_t size);
 
-errval_t ump_receive(struct ump_chan *chan);
+errval_t ump_receive(struct ump_chan *chan, void *buf);
 
 struct cache_line {
     char payload[60];
     uint32_t valid;
+};
+
+struct ump_payload {
+    enum msg_type type;
+    char payload[60 - sizeof(enum msg_type)];
 };
 
 struct aos_rpc {

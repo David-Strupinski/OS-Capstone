@@ -15,6 +15,9 @@
 #include <aos/aos.h>
 #include <aos/aos_rpc.h>
 #include <grading/grading.h>
+#include <barrelfish_kpi/startup_arm.h>
+
+#include <proc_mgmt/proc_mgmt.h>
 
 domainid_t global_pid;
 char global_retchar;
@@ -22,6 +25,8 @@ struct capref global_retcap;
 size_t global_retbytes;
 
 struct aos_rpc *global_rpc;
+
+genvaddr_t global_urpc_frames[4];
 
 void setup_send_handler(void *arg)
 {
@@ -105,6 +110,24 @@ errval_t aos_rpc_init(struct aos_rpc *rpc) {
     return SYS_ERR_OK;
 }
 
+// get the correct struct ump_chan on the monitor
+// direction == 0: core -> monitor
+// direction == 1: monitor -> core
+struct ump_chan *get_ump_chan_mon(coreid_t core, int direction) {
+    // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
+    return (struct ump_chan *)(global_urpc_frames[core] + 
+            BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
+}
+
+// get the correct struct ump_chan for a core
+// direction == 0: core -> monitor
+// direction == 1: monitor -> core
+struct ump_chan *get_ump_chan_core(int direction) {
+    // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
+    return (struct ump_chan *)(MON_URPC_VBASE + 
+            BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
+}
+
 // reset pointers and zero out a struct ump_chan
 errval_t ump_chan_init(struct ump_chan *chan, size_t base) {
     chan->base = base;
@@ -145,7 +168,7 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
 }
 
 // receive a message off the ump channel, performing the appropriate action
-errval_t ump_receive(struct ump_chan *chan) {
+errval_t ump_receive(struct ump_chan *chan, void *buf) {
     // get the current cache line
     struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
 
@@ -154,8 +177,13 @@ errval_t ump_receive(struct ump_chan *chan) {
         return LIB_ERR_NO_UMP_MSG;
     }
     
-    // TODO: perform the appropriate action
-    debug_printf("string from UMP message: %s\n", cl->payload);
+    // copy out the received message
+    memcpy(buf, cl->payload, sizeof(struct ump_payload));
+
+    // invalidate just for fun
+    memset(cl, 0, sizeof(struct cache_line));
+
+    debug_printf("we've received something on core %d\n", disp_get_core_id());
 
     // advance tail to next available cache line in circular buffer
     chan->tail = (chan->tail + sizeof(struct cache_line)) % BASE_PAGE_SIZE;

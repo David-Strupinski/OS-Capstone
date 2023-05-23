@@ -30,6 +30,8 @@ int main(int argc, char *argv[])
         grading_printf("argv[%d] = %s\n", i, argv[i]);
     }
 
+    return EXIT_SUCCESS;
+
     // Get a cnoderef to the L2 table containing inherited capabilities.
     struct cnoderef frame_ref;
     frame_ref.croot = get_croot_addr(cap_root);
@@ -58,7 +60,6 @@ int main(int argc, char *argv[])
         printf("%s\n", (char *)buf);
     }
     
-    return EXIT_SUCCESS;
     while(1) {
         thread_yield();
     }

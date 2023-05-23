@@ -1,5 +1,6 @@
 #include <string.h>
 #include <aos/aos.h>
+#include <aos/aos_rpc.h>
 #include <aos/deferred.h>
 #include <spawn/multiboot.h>
 #include <elf/elf.h>
@@ -16,9 +17,10 @@
 
 extern struct platform_info platform_info;
 extern struct bootinfo     *bi;
-extern genvaddr_t global_urpc_frames[4];
 const char *global_cpu_driver;
 const char *global_init;
+
+extern genvaddr_t global_urpc_frames[4];
 
 struct mem_info {
     size_t   size;       // Size in bytes of the memory region

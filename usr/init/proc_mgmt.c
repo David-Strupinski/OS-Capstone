@@ -182,13 +182,22 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     (void)pid;
 
     // Note: With multicore support, you many need to send a message to the other core
-    if (core != my_core_id) {  // TODO: do
+    if (core != my_core_id) {
         // send message to other core
+        debug_printf("spawning on core %d from core %d\n", core, my_core_id);
+        struct ump_chan * uchan;
+        if (my_core_id == 0) {
+            uchan = get_ump_chan_mon(core, 1);
+        } else {
+            uchan = get_ump_chan_core(0);
+        }
+        struct ump_payload msg;
+        msg.type = SPAWN_CMDLINE;
+        strcpy(msg.payload, cmdline);
+        ump_send(uchan, (char *)&msg, sizeof(struct ump_payload));
 
-        // send spawn message to URPC frame
+        // TODO: wait for ack (blocking), sets pid
 
-
-        // wait for ack (blocking), sets pid
 
 
         return SYS_ERR_OK;

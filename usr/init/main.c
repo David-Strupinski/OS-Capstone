@@ -527,27 +527,6 @@ struct bootinfo *bi;
 coreid_t my_core_id;
 struct platform_info platform_info;
 
-// store pointers to the URPC frames for the other three cores (BSP only)
-genvaddr_t global_urpc_frames[4];
-
-// get the correct struct ump_chan on the monitor
-// direction == 0: core -> monitor
-// direction == 1: monitor -> core
-static inline struct ump_chan *get_ump_chan_mon(coreid_t core, int direction) {
-    // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
-    return (struct ump_chan *)(global_urpc_frames[core] + 
-            BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
-}
-
-// get the correct struct ump_chan for a core
-// direction == 0: core -> monitor
-// direction == 1: monitor -> core
-static inline struct ump_chan *get_ump_chan_core(int direction) {
-    // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
-    return (struct ump_chan *)(MON_URPC_VBASE + 
-            BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
-}
-
 static int
 bsp_main(int argc, char *argv[]) {
     errval_t err;
@@ -630,6 +609,12 @@ bsp_main(int argc, char *argv[]) {
         // dispatch on URPC
         genvaddr_t urpc_base = (genvaddr_t) bi;
         (void)urpc_base;
+
+        // poll for UMP messages
+        for (int i = 1; i < 4; i++) {
+            struct ump_payload payload;
+            ump_receive(get_ump_chan_mon(i, 0), &payload);
+        }
     }
 
     return EXIT_SUCCESS;
@@ -713,7 +698,9 @@ app_main(int argc, char *argv[]) {
     //   - full functionality of the system
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
-    
+
+    //debug_printf("address of chan: %p and core: %d!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", get_ump_chan_core(0), my_core_id);
+
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
@@ -727,7 +714,20 @@ app_main(int argc, char *argv[]) {
         // TODO (M6): handle URPC messages
         // err = urpc_poll_once();
         //debug_printf("trying to receive on core %d\n", my_core_id);
-        ump_receive(get_ump_chan_core(1));
+        struct ump_payload payload;
+        ump_receive(get_ump_chan_core(1), &payload);
+        
+        if (payload.type == SPAWN_CMDLINE) {
+            debug_printf("we're gonna spawn another hello on core %d\n\n\n", disp_get_core_id());
+            domainid_t pid;
+            err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
+            //DEBUG_ERR_ON_FAIL(err, "couldn't spawn process\n");
+            if (err_is_fail(err)) {
+                debug_printf("couldn't spawn a process\n");
+                abort();
+            }
+            thread_yield();
+        }
     }
 
     return EXIT_SUCCESS;

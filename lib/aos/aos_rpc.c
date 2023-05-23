@@ -106,11 +106,11 @@ errval_t aos_rpc_init(struct aos_rpc *rpc) {
 }
 
 // reset pointers and zero out a struct ump_chan
-errval_t ump_chan_init(struct ump_chan *chan, genvaddr_t base) {
+errval_t ump_chan_init(struct ump_chan *chan, size_t base) {
     chan->base = base;
     chan->head = 0;
     chan->tail = 0;
-    memset((void *)chan->base, 0, BASE_PAGE_SIZE);
+    memset((void *)((genvaddr_t)chan + (genvaddr_t)chan->base), 0, BASE_PAGE_SIZE);
     return SYS_ERR_OK;
 }
 
@@ -127,7 +127,7 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
     }
 
     // get the current cache line
-    struct cache_line *cl = (struct cache_line *)(chan->base + chan->head);
+    struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->head);
 
     // zero out valid bytes in cache line
     memset((void *)cl, 0, sizeof(struct cache_line));
@@ -147,8 +147,8 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
 // receive a message off the ump channel, performing the appropriate action
 errval_t ump_receive(struct ump_chan *chan) {
     // get the current cache line
-    struct cache_line *cl = (struct cache_line *)(chan->base + chan->tail);
-    
+    struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
+
     // make sure we have a message
     if (!cl->valid) {
         return LIB_ERR_NO_UMP_MSG;
@@ -254,9 +254,6 @@ static void send_spawn_with_caps_handler(void * arg) {
     struct capref frame = payload->frame;
     size_t len = payload->len;
     struct lmp_chan *lc = rpc->lmp_chan;
-    // debug_printf("printing frame:\n");
-    // debug_print_cap_at_capref(frame);
-
 
     err = lmp_chan_send2(lc, 0, frame, SPAWN_WITH_CAPS_MSG, len);
     while (err_is_fail(err)) {

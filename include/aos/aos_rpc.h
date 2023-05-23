@@ -61,7 +61,7 @@ typedef void (*aos_recv_handler_fn)(void *rpc);
 
 // circular buffer for UMP messaging in a URPC frame
 struct ump_chan {
-    genvaddr_t base;  // base address of the circular buffer
+    size_t base;  // offset of base from struct ump_chan
     size_t head;  // head/sender offset
     size_t tail;  // tail/ack offset
 };
@@ -170,7 +170,7 @@ void pid_recv_handler(void* arg);
  */
 errval_t aos_rpc_init(struct aos_rpc *rpc);
 
-errval_t ump_chan_init(struct ump_chan *chan, genvaddr_t base);
+errval_t ump_chan_init(struct ump_chan *chan, size_t base);
 
 
 

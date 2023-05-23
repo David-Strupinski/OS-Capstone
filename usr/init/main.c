@@ -32,6 +32,8 @@
 
 #include "proc_mgmt.h"
 
+#include <barrelfish_kpi/startup_arm.h>
+
 void gen_recv_handler(void *arg)
 {
     // debug_printf("received message\n");
@@ -528,12 +530,21 @@ struct platform_info platform_info;
 // store pointers to the URPC frames for the other three cores (BSP only)
 genvaddr_t global_urpc_frames[4];
 
-// get the correct struct ump_chan
+// get the correct struct ump_chan on the monitor
 // direction == 0: core -> monitor
 // direction == 1: monitor -> core
-static inline struct ump_chan *get_ump_chan(coreid_t core, int direction) {
+static inline struct ump_chan *get_ump_chan_mon(coreid_t core, int direction) {
     // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
     return (struct ump_chan *)(global_urpc_frames[core] + 
+            BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
+}
+
+// get the correct struct ump_chan for a core
+// direction == 0: core -> monitor
+// direction == 1: monitor -> core
+static inline struct ump_chan *get_ump_chan_core(int direction) {
+    // BASE_PAGE_SIZE / 2 should be enough for bootinfo...
+    return (struct ump_chan *)(MON_URPC_VBASE + 
             BASE_PAGE_SIZE / 2 + direction * sizeof(struct ump_chan));
 }
 
@@ -594,21 +605,16 @@ bsp_main(int argc, char *argv[]) {
 
     // initialize UMP channels
     for (int i = 1; i < 4; i++) {
-        ump_chan_init(get_ump_chan(i, 0), global_urpc_frames[i] + BASE_PAGE_SIZE);
-        ump_chan_init(get_ump_chan(i, 1), global_urpc_frames[i] + 2 * BASE_PAGE_SIZE);
+        genvaddr_t ump_addr = (genvaddr_t)get_ump_chan_mon(i, 0);
+        ump_chan_init((struct ump_chan *)ump_addr, ROUND_UP(ump_addr, BASE_PAGE_SIZE) - ump_addr);
+        ump_addr = (genvaddr_t)get_ump_chan_mon(i, 1);
+        ump_chan_init((struct ump_chan *)ump_addr, ROUND_UP(ump_addr, BASE_PAGE_SIZE) - ump_addr + BASE_PAGE_SIZE);
     }
 
     // calling late grading tests, required functionality up to here:
     //   - full functionality of the system
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
-
-    // try to send ourselves a message over UMP real quick
-    // TODO: remove this
-    ump_receive(get_ump_chan(1, 0));
-    ump_send(get_ump_chan(1, 0), "hi there!", 10);
-    ump_receive(get_ump_chan(1, 0));
-
 
     debug_printf("Message handler loop\n");
     // Hang around
@@ -707,7 +713,7 @@ app_main(int argc, char *argv[]) {
     //   - full functionality of the system
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
-
+    
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
@@ -720,6 +726,8 @@ app_main(int argc, char *argv[]) {
 
         // TODO (M6): handle URPC messages
         // err = urpc_poll_once();
+        //debug_printf("trying to receive on core %d\n", my_core_id);
+        ump_receive(get_ump_chan_core(1));
     }
 
     return EXIT_SUCCESS;

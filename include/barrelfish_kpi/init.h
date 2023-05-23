@@ -54,7 +54,7 @@
  */
 // Supports at least #MON_URPC_CHANNEL_LEN
 // Change #MON_URPC_CHANNEL_LEN if changing this
-#define MON_URPC_SIZE           (2 * BASE_PAGE_SIZE)
+#define MON_URPC_SIZE           (3 * BASE_PAGE_SIZE)
 
 /**
 

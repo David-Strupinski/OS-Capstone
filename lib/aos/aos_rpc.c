@@ -16,6 +16,7 @@
 #include <aos/aos_rpc.h>
 #include <grading/grading.h>
 #include <barrelfish_kpi/startup_arm.h>
+#include <barrelfish_kpi/asm_inlines_arch.h>
 
 #include <proc_mgmt/proc_mgmt.h>
 
@@ -161,7 +162,8 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
     // advance head to next available cache line in circular buffer
     chan->head = (chan->head + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
 
-    // set valid flag
+    // make a memory barrier and set valid flag
+    dmb();
     cl->valid = 1;
 
     return SYS_ERR_OK;
@@ -176,6 +178,9 @@ errval_t ump_receive(struct ump_chan *chan, void *buf) {
     if (!cl->valid) {
         return LIB_ERR_NO_UMP_MSG;
     }
+
+    // make a memory barrier to ensure we actually have the data
+    dmb();
     
     // copy out the received message
     memcpy(buf, cl->payload, sizeof(struct ump_payload));

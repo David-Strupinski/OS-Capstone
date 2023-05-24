@@ -24,13 +24,9 @@
                                VMSAv8_64_L3_BUFFERABLE | \
                                VMSAv8_64_L3_USR_RO)
 
-/* #define INIT_PERM_RW          (VMSAv8_64_L3_CACHEABLE  | \
+#define INIT_PERM_RW          (VMSAv8_64_L3_CACHEABLE  | \
                                   VMSAv8_64_L3_BUFFERABLE | \
-                                  VMSAv8_64_L3_USR_RW) */
-
-// TODO: make this cacheable again!
-#define INIT_PERM_RW          (VMSAv8_64_L3_BUFFERABLE | \
-                               VMSAv8_64_L3_USR_RW)
+                                  VMSAv8_64_L3_USR_RW)
 
 #define INIT_L0_SIZE          (1)
 #define INIT_L1_SIZE          ARMv8_L0_ENTRIES(ARMV8_INIT_SPACE_LIMIT)

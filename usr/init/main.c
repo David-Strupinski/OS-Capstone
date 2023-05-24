@@ -623,7 +623,7 @@ bsp_main(int argc, char *argv[]) {
                             debug_printf("couldn't spawn a process\n");
                             abort();
                         }
-                        thread_yield();
+                        //thread_yield();
                         break;
                     default:
                         debug_printf("received unknown UMP message type\n");

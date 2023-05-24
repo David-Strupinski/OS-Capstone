@@ -183,12 +183,14 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
 
     // Note: With multicore support, you many need to send a message to the other core
     if (core != my_core_id) {
-        // send message to other core
-        debug_printf("spawning on core %d from core %d\n", core, my_core_id);
         struct ump_chan *uchan;
         if (my_core_id == 0) {
+            // send directly to app core
+            debug_printf("sending spawn message from bsp to core %d\n", core);
             uchan = get_ump_chan_mon(core, 1);
         } else {
+            // send to bsp core to forward to app core
+            debug_printf("sending spawn message from core %d to bsp\n", my_core_id);
             uchan = get_ump_chan_core(0);
         }
         struct ump_payload msg;

@@ -55,8 +55,11 @@ static void spawn_one_without_args(coreid_t core)
 
 errval_t grading_run_tests_urpc(void)
 {
-    // TODO: only running on certain cores for now
-    if (grading_options.m6_subtest_run == 0 && disp_get_core_id() != 2) {
+    if (grading_options.m6_subtest_run == 0) {
+        //return SYS_ERR_OK;
+    }
+
+    if (disp_get_core_id() == 5) {
         return SYS_ERR_OK;
     }
 
@@ -64,7 +67,14 @@ errval_t grading_run_tests_urpc(void)
     grading_printf("# TESTS: Milestone 6 (URPC)                      \n");
     grading_printf("#################################################\n");
 
+    // if (disp_get_core_id() != 0) spawn_one_without_args(0);
+    // if (disp_get_core_id() != 1) spawn_one_without_args(1);
+    // if (disp_get_core_id() != 2) spawn_one_without_args(2);
+    // if (disp_get_core_id() != 3) spawn_one_without_args(3);
+
     spawn_one_without_args(0);
+    spawn_one_without_args(1);
+    spawn_one_without_args(2);
     spawn_one_without_args(3);
 
     grading_printf("#################################################\n");

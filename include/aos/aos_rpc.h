@@ -91,7 +91,8 @@ struct cache_line {
 
 struct ump_payload {
     enum msg_type type;
-    char payload[60 - sizeof(enum msg_type)];
+    coreid_t core;
+    char payload[60 - sizeof(enum msg_type) - sizeof(coreid_t)];
 };
 
 struct aos_rpc {

@@ -185,7 +185,7 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     if (core != my_core_id) {
         // send message to other core
         debug_printf("spawning on core %d from core %d\n", core, my_core_id);
-        struct ump_chan * uchan;
+        struct ump_chan *uchan;
         if (my_core_id == 0) {
             uchan = get_ump_chan_mon(core, 1);
         } else {
@@ -193,7 +193,8 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
         }
         struct ump_payload msg;
         msg.type = SPAWN_CMDLINE;
-        strcpy(msg.payload, cmdline);
+        msg.core = core;
+        strncpy(msg.payload, cmdline, 60 - sizeof(enum msg_type) - sizeof(coreid_t));
         ump_send(uchan, (char *)&msg, sizeof(struct ump_payload));
 
         // TODO: wait for ack (blocking), sets pid

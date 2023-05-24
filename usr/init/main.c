@@ -613,8 +613,25 @@ bsp_main(int argc, char *argv[]) {
         // poll for UMP messages
         for (int i = 1; i < 4; i++) {
             struct ump_payload payload;
-            ump_receive(get_ump_chan_mon(i, 0), &payload);
+            err = ump_receive(get_ump_chan_mon(i, 0), &payload);
+            if (err == SYS_ERR_OK) {
+                switch (payload.type) {
+                    case SPAWN_CMDLINE:
+                        domainid_t pid;
+                        err = proc_mgmt_spawn_with_cmdline(payload.payload, payload.core, &pid);
+                        if (err_is_fail(err)) {
+                            debug_printf("couldn't spawn a process\n");
+                            abort();
+                        }
+                        thread_yield();
+                        break;
+                    default:
+                        debug_printf("received unknown UMP message type\n");
+                }
+            }
         }
+
+        thread_yield();
     }
 
     return EXIT_SUCCESS;
@@ -650,7 +667,7 @@ app_main(int argc, char *argv[]) {
         .slot = 0
     };
     err = ram_forge(ram_cap, bi->regions[0].mr_base, bi->regions[0].mr_bytes, my_core_id);
-    DEBUG_ERR_ON_FAIL(err, "couldn't download ram from other core\n");
+    DEBUG_ERR_ON_FAIL(err, "couldn't get ram from other core\n");
 
     // Forge caps to every module
     for (int i = 1; i < (int) bi->regions_length; i++) {
@@ -668,7 +685,7 @@ app_main(int argc, char *argv[]) {
     genpaddr_t* base = urpc_buf + sizeof(struct bootinfo) + ((bi->regions_length) * sizeof(struct mem_region));
     gensize_t* bytes = urpc_buf + sizeof(struct bootinfo) + ((bi->regions_length) * sizeof(struct mem_region)) + sizeof(genpaddr_t);
     err = frame_forge(cap_mmstrings, *base, ROUND_UP(*bytes, BASE_PAGE_SIZE), my_core_id);
-    DEBUG_ERR_ON_FAIL(err, "couldn't download module strings from other core\n");
+    DEBUG_ERR_ON_FAIL(err, "couldn't get module strings from other core\n");
 
     // Init the mem allocator
     err = initialize_ram_alloc(bi);
@@ -699,8 +716,6 @@ app_main(int argc, char *argv[]) {
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
 
-    //debug_printf("address of chan: %p and core: %d!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", get_ump_chan_core(0), my_core_id);
-
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
@@ -711,23 +726,25 @@ app_main(int argc, char *argv[]) {
             abort();
         }
 
-        // TODO (M6): handle URPC messages
-        // err = urpc_poll_once();
-        //debug_printf("trying to receive on core %d\n", my_core_id);
+        // check for a UMP message
         struct ump_payload payload;
-        ump_receive(get_ump_chan_core(1), &payload);
-        
-        if (payload.type == SPAWN_CMDLINE) {
-            debug_printf("we're gonna spawn another hello on core %d\n\n\n", disp_get_core_id());
-            domainid_t pid;
-            err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
-            //DEBUG_ERR_ON_FAIL(err, "couldn't spawn process\n");
-            if (err_is_fail(err)) {
-                debug_printf("couldn't spawn a process\n");
-                abort();
+        err = ump_receive(get_ump_chan_core(1), &payload);
+        if (err == SYS_ERR_OK) {
+            switch (payload.type) {
+                case SPAWN_CMDLINE:
+                    domainid_t pid;
+                    err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
+                    if (err_is_fail(err)) {
+                        debug_printf("couldn't spawn a process\n");
+                        abort();
+                    }
+                    thread_yield();
+                    break;
+                default:
+                    debug_printf("received unknown UMP message type\n");
             }
-            thread_yield();
         }
+        thread_yield();
     }
 
     return EXIT_SUCCESS;

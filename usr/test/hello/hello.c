@@ -24,7 +24,7 @@
 int main(int argc, char *argv[])
 {
     /// !!! Keep those prints here to make the tests go through
-    grading_printf("Hello, world! from userspace (%u)\n", argc);
+    grading_printf("Hello, world! from userspace (args: %u, core: %d)\n", argc, disp_get_core_id());
 
     for (int i = 0; i < argc; i++) {
         grading_printf("argv[%d] = %s\n", i, argv[i]);

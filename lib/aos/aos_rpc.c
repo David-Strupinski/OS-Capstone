@@ -183,8 +183,6 @@ errval_t ump_receive(struct ump_chan *chan, void *buf) {
     // invalidate just for fun
     memset(cl, 0, sizeof(struct cache_line));
 
-    debug_printf("we've received something on core %d\n", disp_get_core_id());
-
     // advance tail to next available cache line in circular buffer
     chan->tail = (chan->tail + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
 

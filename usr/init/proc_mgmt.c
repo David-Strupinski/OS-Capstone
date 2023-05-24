@@ -124,6 +124,8 @@ static errval_t parse_args(const char *cmdline, int *argc, char *argv[])
 errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struct capref capv[],
                                    coreid_t core, domainid_t *pid)
 {
+    errval_t err;
+
     // make compiler happy about unused parameters
     (void)argc;
     (void)argv;
@@ -132,6 +134,10 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     (void)core;
     (void)pid;
     struct spawninfo * si = (struct spawninfo *) malloc(sizeof(struct spawninfo));
+    if (si == NULL) {
+        debug_printf("malloc failed in spawn with caps\n");
+        abort();
+    }
     struct elfimg ei;
 
     si->next = root;
@@ -151,8 +157,10 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     si->module = module;
 
     elfimg_init_from_module(&ei, module);
-    spawn_load_with_caps(si, &ei, argc, argv, capc, capv, si->pid);
-    spawn_start(si);
+    err = spawn_load_with_caps(si, &ei, argc, argv, capc, capv, si->pid);
+    DEBUG_ERR_ON_FAIL(err, "couldn't spawn load with caps\n");
+    err = spawn_start(si);
+    DEBUG_ERR_ON_FAIL(err, "couldn't start loaded process\n");
     *pid = si->pid;
     // TODO:
     //  - optional - if we want to stop and restart processes (or kill at all) keep track of 
@@ -176,10 +184,7 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
  */
 errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domainid_t *pid)
 {
-    // make compiler happy about unused parameters
-    (void)cmdline;
-    (void)core;
-    (void)pid;
+    errval_t err;
 
     // Note: With multicore support, you many need to send a message to the other core
     if (core != my_core_id) {
@@ -205,13 +210,19 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
 
         return SYS_ERR_OK;
     }
+
+    //debug_printf("trying to spawn a process on the same core\n");
     
     // parse command line properly
     const char *argv[MAX_CMDLINE_ARGS];
     argv[0] = cmdline;
     int argc = 0;
-    parse_args(cmdline, &argc, (char **)argv);
-    proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, core, pid);
+    err = parse_args(cmdline, &argc, (char **)argv);
+    DEBUG_ERR_ON_FAIL(err, "couldn't parse args\n");
+    debug_printf("parsed %d args\n", argc);
+    err = proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, core, pid);
+    DEBUG_ERR_ON_FAIL(err, "couldn't spawn with caps\n");
+    debug_printf("spawned a process\n");
     return SYS_ERR_OK;
 }
 

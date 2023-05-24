@@ -623,7 +623,6 @@ bsp_main(int argc, char *argv[]) {
                             debug_printf("couldn't spawn a process\n");
                             abort();
                         }
-                        //thread_yield();
                         break;
                     default:
                         debug_printf("received unknown UMP message type\n");
@@ -732,6 +731,7 @@ app_main(int argc, char *argv[]) {
         if (err == SYS_ERR_OK) {
             switch (payload.type) {
                 case SPAWN_CMDLINE:
+                    //ebug_printf("received a message from bsp\n");
                     domainid_t pid;
                     err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
                     if (err_is_fail(err)) {

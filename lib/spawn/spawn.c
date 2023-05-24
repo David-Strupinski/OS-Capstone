@@ -162,6 +162,10 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     //printf("%.4s\n", si->module_data);
 
     si->binary_name = malloc(strlen((char*)argv[0]) + 1);
+    if (si->binary_name == NULL) {
+        debug_printf("malloc failed\n");
+        abort();
+    }
     strcpy(si->binary_name, (char*) argv[0]);
     
     // reconstruct si->cmdline from argv with spaces
@@ -249,7 +253,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     child_table.cnode = l2_slot_page_cnode;
     child_table.slot = 0;
-    
+
     // END SETUP CSPACE -----------------------------------------------------
     
     // SETUP VSPACE ---------------------------------------------------------
@@ -272,7 +276,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     err = paging_init_state_foreign(si->st, BASE_PAGE_SIZE, parent_version_of_child_table, get_default_slot_allocator());
     DEBUG_ERR_ON_FAIL(err, "initializing child paging state\n");
-    
+
     // END SETUP VSPACE -----------------------------------------------------
 
     // ELF PARSING ----------------------------------------------------------
@@ -287,7 +291,7 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
     // END ELF PARSING ------------------------------------------------------
 
     // SETUP ENVIRONMENT ----------------------------------------------------
-    
+
     struct capref args_cap;
     void *parent_args;
     void *child_args;
@@ -297,6 +301,9 @@ errval_t spawn_load_with_caps(struct spawninfo *si, struct elfimg *img, int argc
 
     err = paging_map_frame_attr(si->st, &child_args, ARGS_SIZE, args_cap, VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping frame for child args\n");
+
+    //debug_printf("args_cap:\n");
+    //debug_print_cap_at_capref(args_cap);
     err = paging_map_frame_attr(get_current_paging_state(), &parent_args, ARGS_SIZE, args_cap, VREGION_FLAGS_READ_WRITE);
     DEBUG_ERR_ON_FAIL(err, "mapping frame for parent args\n");
 

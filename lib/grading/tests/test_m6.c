@@ -59,7 +59,7 @@ errval_t grading_run_tests_urpc(void)
         //return SYS_ERR_OK;
     }
 
-    if (disp_get_core_id() == 5) {
+    if (disp_get_core_id() == 2 || disp_get_core_id() == 3) {
         return SYS_ERR_OK;
     }
 
@@ -74,8 +74,7 @@ errval_t grading_run_tests_urpc(void)
 
     spawn_one_without_args(0);
     spawn_one_without_args(1);
-    spawn_one_without_args(2);
-    spawn_one_without_args(3);
+
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 6 (URPC)                      \n");

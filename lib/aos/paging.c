@@ -354,6 +354,7 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
 errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_t bytes,
                                       struct capref frame, size_t offset, int flags)
 {
+    errval_t err;
     // TODO(M1):
     //  - decide on which virtual address to map the frame at
     //  - map the frame assuming all mappings will fit into one leaf page table (L3)  (fail otherwise)
@@ -363,11 +364,12 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
 
     // find and reserve an empty area of the virtual address space
-    paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
+    err = paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate a page for mapping\n");
     
     // map the found slot
     genvaddr_t vaddr = (genvaddr_t)*buf;
-    errval_t err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
+    err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
     if (err_is_fail(err)) {
         printf("vnode_map failed: %s\n", err_getstring(err));
         return err;
@@ -479,6 +481,10 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
 
         // map the maximum number of pages that we can fit in this L3 page table
+        //debug_printf("awful capref at L0 index %d L1 index %d L2 index %d and L3 index %d:\n", VMSAv8_64_L0_INDEX(vaddr), VMSAv8_64_L1_INDEX(vaddr),VMSAv8_64_L2_INDEX(vaddr), VMSAv8_64_L3_INDEX(vaddr));
+        // debug_print_cap_at_capref(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
+        //                           children[VMSAv8_64_L1_INDEX(vaddr)]->
+        //                           children[VMSAv8_64_L2_INDEX(vaddr)]->self);
         numMapped = MIN((int)(NUM_PT_SLOTS - VMSAv8_64_L3_INDEX(vaddr)), numPages);
         err = vnode_map(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                   children[VMSAv8_64_L1_INDEX(vaddr)]->

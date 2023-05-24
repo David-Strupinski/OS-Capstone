@@ -749,9 +749,6 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     (void)newpid;
 
     errval_t err;
-    
-    // make compiler happy about unused parameters
-    
 
     // debug_printf("entered api for spawn cmdline\n");
     // debug_printf("here's the cmdline: %s\n", cmdline);
@@ -762,9 +759,10 @@ errval_t aos_rpc_proc_spawn_with_cmdline(struct aos_rpc *rpc, const char *cmdlin
     void *buf;
     int len = strlen(cmdline);
     // debug_printf("this is the string len: %d\n", len);
-    err = frame_alloc(&frame, len, NULL);
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
-    err = paging_map_frame_attr(get_current_paging_state(), &buf, len, frame, VREGION_FLAGS_READ_WRITE);
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map frame for string\n");
     strcpy(buf, cmdline);
 
     // pass the string frame and length in the payload

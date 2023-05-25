@@ -75,8 +75,6 @@ struct ump_chan *get_ump_chan_core(int direction);
 // circular buffer for UMP messaging in a URPC frame
 struct ump_chan {
     size_t base;  // offset of base from struct ump_chan
-    size_t head;  // head/sender offset
-    size_t tail;  // tail/ack offset
 };
 
 // circular ump chan buffer functions
@@ -85,7 +83,9 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size);
 errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf);
 
 struct cache_line {
-    char payload[60];
+    char payload[58];
+    uint8_t frag_num;
+    uint8_t total_frags;
     uint32_t valid;
 };
 
@@ -93,7 +93,7 @@ struct ump_payload {
     enum msg_type type;
     coreid_t send_core;
     coreid_t recv_core;
-    char payload[60 - sizeof(enum msg_type) - 2 * sizeof(coreid_t)];
+    char payload[128];
 };
 
 struct aos_rpc {

@@ -132,8 +132,6 @@ struct ump_chan *get_ump_chan_core(int direction) {
 // reset pointers and zero out a struct ump_chan
 errval_t ump_chan_init(struct ump_chan *chan, size_t base) {
     chan->base = base;
-    chan->head = 0;
-    chan->tail = 0;
     memset((void *)((genvaddr_t)chan + (genvaddr_t)chan->base), 0, BASE_PAGE_SIZE);
     return SYS_ERR_OK;
 }
@@ -155,33 +153,39 @@ errval_t ump_chan_init(struct ump_chan *chan, size_t base) {
 
 // add a message to the ump channel
 errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
-    //debug_printf("sending on address %p\n", chan);
-    // check that the payload is a valid size and that we have room in our queue
-    if (size > 60) {
-        debug_printf("size of UMP message exceeds 60 bytes\n");
+    if (size > 256 * 58) {
         return LIB_ERR_UMP_BUFSIZE_INVALID;
     }
+    
+    int total_frags = size % 58 == 0 ? size / 58 : (size / 58) + 1;
 
     dmb();
 
-    for (int slot = 0; slot < 64; slot++) {
-        struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + slot * 64);
-        if (!cl->valid) {
-            // zero out valid bytes in cache line
-            memset((void *)cl, 0, sizeof(struct cache_line));
+    for (int frag_num = 0; frag_num < total_frags; frag_num++) {
+        // find a slot
+        for (int slot = 0; slot < 64; slot++) {
+            struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + slot * 64);
+            if (!cl->valid) {
+                // zero out valid bytes in cache line
+                memset((void *)cl, 0, sizeof(struct cache_line));
 
-            // copy data into cache line
-            memcpy((void *)cl, buf, size);
+                // copy data into cache line
+                memcpy((void *)cl, buf + frag_num * 58, MIN(58, size - frag_num * 58));
 
-            // make a memory barrier and set valid flag
-            dmb();
-            cl->valid = 1;
+                // set other cache line fields
+                cl->frag_num = frag_num;
+                cl->total_frags = total_frags;
 
-            return SYS_ERR_OK;
+                // make a memory barrier and set valid flag
+                dmb();
+                cl->valid = 1;
+
+                break;
+            }
         }
     }
 
-    return LIB_ERR_UMP_CHAN_FULL;
+    return SYS_ERR_OK;
 }
 
 // receive a message off the ump channel with the specified type
@@ -194,11 +198,17 @@ errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf) {
         if (cl->valid) {
             dmb();
             if (((struct ump_payload *)(cl->payload))->type == type) {
-                // copy out the received message
-                memcpy(buf, cl->payload, sizeof(struct ump_payload));
+                for (int frag_num = cl->frag_num; frag_num < cl->total_frags; frag_num++) {
+                    // copy out the received message
+                    memcpy(buf + 58 * cl->frag_num, cl->payload, cl->frag_num == cl->total_frags - 1 ? sizeof(struct ump_payload) % 58 : 58);
 
-                // invalidate
-                memset(cl, 0, sizeof(struct cache_line));
+                    // invalidate this cache line
+                    cl->valid = 0;
+                    dmb();
+
+                    // advance to the next cache line
+                    cl++;
+                }
 
                 return SYS_ERR_OK;
             }

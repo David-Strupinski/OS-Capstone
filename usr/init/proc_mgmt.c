@@ -193,7 +193,7 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
         send_msg.type = SPAWN_CMDLINE;
         send_msg.send_core = my_core_id;
         send_msg.recv_core = core;
-        strncpy(send_msg.payload, cmdline, 60 - sizeof(enum msg_type) - 2 * sizeof(coreid_t));
+        strncpy(send_msg.payload, cmdline, 128);
         if (my_core_id == 0) {
             // send directly to app core
             debug_printf("sending spawn message from bsp to core %d\n", core);

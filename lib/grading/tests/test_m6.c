@@ -66,6 +66,11 @@ errval_t grading_run_tests_urpc(void)
     spawn_one_without_args((disp_get_core_id() + 1) % 4);
     spawn_one_without_args((disp_get_core_id() + 2) % 4);
 
+    if (disp_get_core_id() == 1) {
+        domainid_t pid;
+        proc_mgmt_spawn_with_cmdline("hello this_is_a_loooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong_string", 2, &pid);
+    }
+
 
     grading_printf("#################################################\n");
     grading_printf("# DONE:  Milestone 6 (URPC)                      \n");

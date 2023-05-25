@@ -188,25 +188,51 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
 
     // Note: With multicore support, you many need to send a message to the other core
     if (core != my_core_id) {
-        struct ump_chan *uchan;
+        // set up a message to send to another core
+        struct ump_payload send_msg;
+        send_msg.type = SPAWN_CMDLINE;
+        send_msg.send_core = my_core_id;
+        send_msg.recv_core = core;
+        strncpy(send_msg.payload, cmdline, 60 - sizeof(enum msg_type) - 2 * sizeof(coreid_t));
         if (my_core_id == 0) {
             // send directly to app core
             debug_printf("sending spawn message from bsp to core %d\n", core);
-            uchan = get_ump_chan_mon(core, 1);
+            ump_send(get_ump_chan_mon(core, 1), (char *)&send_msg, sizeof(struct ump_payload));
+
+            // wait for response and set the pid
+            struct ump_payload recv_msg;
+            debug_printf("waiting for pid.............................................\n");
+            while (true) {
+                err = ump_receive(get_ump_chan_mon(core, 0), PID_ACK, &recv_msg);
+                //debug_printf("error: %s\n", err_getstring(err));
+                if (err == SYS_ERR_OK) {
+                    debug_printf("got pid!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                    break;
+                }
+                thread_yield();
+            }
+
         } else {
             // send to bsp core to forward to app core
             debug_printf("sending spawn message from core %d to bsp\n", my_core_id);
-            uchan = get_ump_chan_core(0);
+            ump_send(get_ump_chan_core(0), (char *)&send_msg, sizeof(struct ump_payload));
         }
-        struct ump_payload msg;
-        msg.type = SPAWN_CMDLINE;
-        msg.core = core;
-        strncpy(msg.payload, cmdline, 60 - sizeof(enum msg_type) - sizeof(coreid_t));
-        ump_send(uchan, (char *)&msg, sizeof(struct ump_payload));
 
-        // TODO: wait for ack (blocking), sets pid
+        // // wait for ack (blocking) and set pid
+        // struct ump_pid_payload receive_buf;
+        // debug_printf("waiting for ack\n");
+        // while ((err = ump_receive(receive_chan, (struct ump_payload *)&receive_buf)) != SYS_ERR_OK) {
+        //     thread_yield();
+        // }
+        // debug_printf("ack received\n");
 
-
+        // if (my_core_id == 0 && receive_buf.request_core != my_core_id) {
+        //     // forward to correct core
+        //     ump_send(get_ump_chan_mon(receive_buf.request_core, 1), (char *)&receive_buf, sizeof(receive_buf));
+        // } else {
+        //     // set the PID
+        //     *pid = receive_buf.pid;
+        // }
 
         return SYS_ERR_OK;
     }

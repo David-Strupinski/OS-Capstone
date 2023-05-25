@@ -82,7 +82,7 @@ struct ump_chan {
 // circular ump chan buffer functions
 errval_t ump_send(struct ump_chan *chan, char *buf, size_t size);
 
-errval_t ump_receive(struct ump_chan *chan, void *buf);
+errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf);
 
 struct cache_line {
     char payload[60];
@@ -91,8 +91,9 @@ struct cache_line {
 
 struct ump_payload {
     enum msg_type type;
-    coreid_t core;
-    char payload[60 - sizeof(enum msg_type) - sizeof(coreid_t)];
+    coreid_t send_core;
+    coreid_t recv_core;
+    char payload[60 - sizeof(enum msg_type) - 2 * sizeof(coreid_t)];
 };
 
 struct aos_rpc {

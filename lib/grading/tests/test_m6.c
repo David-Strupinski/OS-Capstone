@@ -32,7 +32,7 @@
 #include <grading/tests.h>
 #include "../include/grading/options_internal.h"
 
-#define BINARY_NAME "hello"
+#define BINARY_NAME "alloc"
 
 
 static void spawn_one_without_args(coreid_t core)
@@ -59,6 +59,7 @@ errval_t grading_run_tests_urpc(void)
         //return SYS_ERR_OK;
     }
 
+    // TODO: support more than two cores?
     if (disp_get_core_id() == 2 || disp_get_core_id() == 3) {
         return SYS_ERR_OK;
     }

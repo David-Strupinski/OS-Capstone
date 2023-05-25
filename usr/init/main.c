@@ -613,19 +613,13 @@ bsp_main(int argc, char *argv[]) {
         // poll for UMP messages
         for (int i = 1; i < 4; i++) {
             struct ump_payload payload;
-            err = ump_receive(get_ump_chan_mon(i, 0), &payload);
+            err = ump_receive(get_ump_chan_mon(i, 0), SPAWN_CMDLINE, &payload);
             if (err == SYS_ERR_OK) {
-                switch (payload.type) {
-                    case SPAWN_CMDLINE:
-                        domainid_t pid;
-                        err = proc_mgmt_spawn_with_cmdline(payload.payload, payload.core, &pid);
-                        if (err_is_fail(err)) {
-                            debug_printf("couldn't spawn a process\n");
-                            abort();
-                        }
-                        break;
-                    default:
-                        debug_printf("received unknown UMP message type\n");
+                domainid_t pid;
+                err = proc_mgmt_spawn_with_cmdline(payload.payload, payload.recv_core, &pid);
+                if (err_is_fail(err)) {
+                    debug_printf("couldn't spawn a process\n");
+                    abort();
                 }
             }
         }
@@ -727,22 +721,25 @@ app_main(int argc, char *argv[]) {
 
         // check for a UMP message
         struct ump_payload payload;
-        err = ump_receive(get_ump_chan_core(1), &payload);
+        err = ump_receive(get_ump_chan_core(1), SPAWN_CMDLINE, &payload);
         if (err == SYS_ERR_OK) {
-            switch (payload.type) {
-                case SPAWN_CMDLINE:
-                    //ebug_printf("received a message from bsp\n");
-                    domainid_t pid;
-                    err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
-                    if (err_is_fail(err)) {
-                        debug_printf("couldn't spawn a process\n");
-                        abort();
-                    }
-                    thread_yield();
-                    break;
-                default:
-                    debug_printf("received unknown UMP message type\n");
+            // spawn a process
+            domainid_t pid;
+            err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
+            if (err_is_fail(err)) {
+                debug_printf("couldn't spawn a process\n");
+                abort();
             }
+
+            // send an ack
+            struct ump_payload pid_payload;
+            pid_payload.type = PID_ACK;
+            pid_payload.send_core = my_core_id;
+            pid_payload.recv_core = payload.send_core;
+            memcpy(&(pid_payload.payload), &pid, sizeof(pid));
+            debug_printf("sending back pid %d\n\n\n", pid);
+            err = ump_send(get_ump_chan_core(0), (char *)&pid_payload, sizeof(pid_payload));
+            DEBUG_ERR_ON_FAIL(err, "couldn't send back PID\n");
         }
         thread_yield();
     }

@@ -140,6 +140,7 @@ errval_t ump_chan_init(struct ump_chan *chan, size_t base) {
 
 // add a message to the ump channel
 errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
+    //debug_printf("sending on address %p\n", chan);
     // check that the payload is a valid size and that we have room in our queue
     if (size > 60) {
         debug_printf("size of UMP message exceeds 60 bytes\n");
@@ -169,8 +170,9 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
     return SYS_ERR_OK;
 }
 
-// receive a message off the ump channel, performing the appropriate action
-errval_t ump_receive(struct ump_chan *chan, void *buf) {
+// receive a message off the ump channel with the specified type
+errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf) {
+    //debug_printf("listening on address %p\n", chan);
     // get the current cache line
     struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
 
@@ -181,6 +183,11 @@ errval_t ump_receive(struct ump_chan *chan, void *buf) {
 
     // make a memory barrier to ensure we actually have the data
     dmb();
+
+    // inspect the message to make sure it's the correct type
+    if (((struct ump_payload *)(cl->payload))->type != type) {
+        return LIB_ERR_NO_UMP_MSG;
+    }
     
     // copy out the received message
     memcpy(buf, cl->payload, sizeof(struct ump_payload));

@@ -59,23 +59,12 @@ errval_t grading_run_tests_urpc(void)
         //return SYS_ERR_OK;
     }
 
-    // TODO: support more than two cores?
-    if (disp_get_core_id() == 2 || disp_get_core_id() == 3) {
-        return SYS_ERR_OK;
-    }
-
     grading_printf("#################################################\n");
     grading_printf("# TESTS: Milestone 6 (URPC)                      \n");
     grading_printf("#################################################\n");
 
-    // if (disp_get_core_id() != 0) spawn_one_without_args(0);
-    // if (disp_get_core_id() != 1) spawn_one_without_args(1);
-    // if (disp_get_core_id() != 2) spawn_one_without_args(2);
-    // if (disp_get_core_id() != 3) spawn_one_without_args(3);
-
-    spawn_one_without_args(0);
-    spawn_one_without_args(1);
-    spawn_one_without_args(2);
+    spawn_one_without_args((disp_get_core_id() + 1) % 4);
+    spawn_one_without_args((disp_get_core_id() + 2) % 4);
 
 
     grading_printf("#################################################\n");

@@ -595,20 +595,14 @@ bsp_main(int argc, char *argv[]) {
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
 
-    debug_printf("Message handler loop\n");
     // Hang around
     struct waitset *default_ws = get_default_waitset();
     while (true) {
         err = event_dispatch_non_block(default_ws);
-
         if (err_is_fail(err) && err != LIB_ERR_NO_EVENT) {
             DEBUG_ERR(err, "in event_dispatch");
             abort();
         }
-
-        // dispatch on URPC
-        genvaddr_t urpc_base = (genvaddr_t) bi;
-        (void)urpc_base;
 
         // poll for UMP messages
         for (int i = 1; i < 4; i++) {
@@ -621,6 +615,15 @@ bsp_main(int argc, char *argv[]) {
                     debug_printf("couldn't spawn a process\n");
                     abort();
                 }
+
+                struct ump_payload recv_msg;
+                recv_msg.type = PID_ACK;
+                recv_msg.recv_core = payload.send_core;
+                recv_msg.send_core = my_core_id;
+                memcpy(&recv_msg.payload, &pid, sizeof(pid));
+
+                // forward the ack to the correct core
+                ump_send(get_ump_chan_mon(recv_msg.recv_core, 1), (char *)&recv_msg, sizeof(recv_msg));
             }
         }
 
@@ -731,13 +734,12 @@ app_main(int argc, char *argv[]) {
                 abort();
             }
 
-            // send an ack
+            // send an ack with the pid
             struct ump_payload pid_payload;
             pid_payload.type = PID_ACK;
             pid_payload.send_core = my_core_id;
             pid_payload.recv_core = payload.send_core;
             memcpy(&(pid_payload.payload), &pid, sizeof(pid));
-            debug_printf("sending back pid %d\n\n\n", pid);
             err = ump_send(get_ump_chan_core(0), (char *)&pid_payload, sizeof(pid_payload));
             DEBUG_ERR_ON_FAIL(err, "couldn't send back PID\n");
         }

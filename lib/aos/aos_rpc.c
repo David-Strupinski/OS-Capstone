@@ -161,69 +161,51 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
         debug_printf("size of UMP message exceeds 60 bytes\n");
         return LIB_ERR_UMP_BUFSIZE_INVALID;
     }
-    if ((chan->head + 1) % BASE_PAGE_SIZE == chan->tail) {
-        debug_printf("UMP queue is full\n");
-        return LIB_ERR_UMP_CHAN_FULL;
+
+    dmb();
+
+    for (int slot = 0; slot < 64; slot++) {
+        struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + slot * 64);
+        if (!cl->valid) {
+            // zero out valid bytes in cache line
+            memset((void *)cl, 0, sizeof(struct cache_line));
+
+            // copy data into cache line
+            memcpy((void *)cl, buf, size);
+
+            // make a memory barrier and set valid flag
+            dmb();
+            cl->valid = 1;
+
+            return SYS_ERR_OK;
+        }
     }
 
-    // get the current cache line
-    struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->head);
-
-    // zero out valid bytes in cache line
-    memset((void *)cl, 0, sizeof(struct cache_line));
-
-    // copy data into cache line
-    memcpy((void *)cl, buf, size);
-
-    // advance head to next available cache line in circular buffer
-    chan->head = (chan->head + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
-
-    // make a memory barrier and set valid flag
-    dmb();
-    cl->valid = 1;
-
-    //ump_print(chan);
-
-    return SYS_ERR_OK;
+    return LIB_ERR_UMP_CHAN_FULL;
 }
 
 // receive a message off the ump channel with the specified type
 errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf) {
-    //debug_printf("listening on address %p\n", chan);
-    // get the current cache line
-    struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
+    for (int slot = 0; slot < 64; slot++) {
+        // get the current cache line
+        struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + slot * 64);
 
-    // make sure we have a message
-    if (!cl->valid) {
-        return LIB_ERR_NO_UMP_MSG;
+        // make sure we have a message
+        if (cl->valid) {
+            dmb();
+            if (((struct ump_payload *)(cl->payload))->type == type) {
+                // copy out the received message
+                memcpy(buf, cl->payload, sizeof(struct ump_payload));
+
+                // invalidate
+                memset(cl, 0, sizeof(struct cache_line));
+
+                return SYS_ERR_OK;
+            }
+        }
     }
 
-    // make a memory barrier to ensure we actually have the data
-    dmb();
-
-    // inspect the message to make sure it's the correct type
-    if (((struct ump_payload *)(cl->payload))->type != type) {
-        // ump_send(chan, cl->payload, sizeof(cl->payload));
-        // chan->tail = (chan->tail + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
-        // cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
-        // debug_printf("shifting things...\n");
-
-        return LIB_ERR_BIND_UMP_REPLY;
-    }
-    
-    // copy out the received message
-    memcpy(buf, cl->payload, sizeof(struct ump_payload));
-
-    // invalidate just for fun
-    memset(cl, 0, sizeof(struct cache_line));
-
-    // advance tail to next available cache line in circular buffer
-    chan->tail = (chan->tail + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
-    debug_printf("new tail offset: %d\n", chan->tail);
-
-    //ump_print(chan);
-
-    return SYS_ERR_OK;
+    return LIB_ERR_NO_UMP_MSG;
 }
 
 static void send_num_handler(void *arg)

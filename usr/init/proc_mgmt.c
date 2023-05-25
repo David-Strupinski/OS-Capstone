@@ -201,38 +201,34 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
 
             // wait for response and set the pid
             struct ump_payload recv_msg;
-            debug_printf("waiting for pid.............................................\n");
             while (true) {
                 err = ump_receive(get_ump_chan_mon(core, 0), PID_ACK, &recv_msg);
-                //debug_printf("error: %s\n", err_getstring(err));
                 if (err == SYS_ERR_OK) {
-                    debug_printf("got pid!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                    // debug_printf("got pid %d\n", *(domainid_t *)recv_msg.payload);
+                    *pid = *(domainid_t *)recv_msg.payload;
+
                     break;
                 }
                 thread_yield();
             }
-
         } else {
             // send to bsp core to forward to app core
-            debug_printf("sending spawn message from core %d to bsp\n", my_core_id);
-            ump_send(get_ump_chan_core(0), (char *)&send_msg, sizeof(struct ump_payload));
+            err = ump_send(get_ump_chan_core(0), (char *)&send_msg, sizeof(struct ump_payload));
+            DEBUG_ERR_ON_FAIL(err, "couldn't send spawn message to bsp\n");
+
+            // // wait for response and set the pid
+            // struct ump_payload recv_msg;
+            // while (true) {
+            //     err = ump_receive(get_ump_chan_core(1), PID_ACK, &recv_msg);
+            //     if (err == SYS_ERR_OK) {
+            //         debug_printf("got pid %d\n", *(domainid_t *)recv_msg.payload);
+            //         *pid = *(domainid_t *)recv_msg.payload;
+            //         break;
+            //     }
+            //     debug_printf("error: %s\n", err_getstring(err));
+            //     thread_yield();
+            // }
         }
-
-        // // wait for ack (blocking) and set pid
-        // struct ump_pid_payload receive_buf;
-        // debug_printf("waiting for ack\n");
-        // while ((err = ump_receive(receive_chan, (struct ump_payload *)&receive_buf)) != SYS_ERR_OK) {
-        //     thread_yield();
-        // }
-        // debug_printf("ack received\n");
-
-        // if (my_core_id == 0 && receive_buf.request_core != my_core_id) {
-        //     // forward to correct core
-        //     ump_send(get_ump_chan_mon(receive_buf.request_core, 1), (char *)&receive_buf, sizeof(receive_buf));
-        // } else {
-        //     // set the PID
-        //     *pid = receive_buf.pid;
-        // }
 
         return SYS_ERR_OK;
     }
@@ -245,10 +241,8 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
     int argc = 0;
     err = parse_args(cmdline, &argc, (char **)argv);
     DEBUG_ERR_ON_FAIL(err, "couldn't parse args\n");
-    debug_printf("parsed %d args\n", argc);
     err = proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, core, pid);
     DEBUG_ERR_ON_FAIL(err, "couldn't spawn with caps\n");
-    debug_printf("spawned a process\n");
     return SYS_ERR_OK;
 }
 

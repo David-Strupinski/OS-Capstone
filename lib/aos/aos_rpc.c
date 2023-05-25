@@ -138,6 +138,21 @@ errval_t ump_chan_init(struct ump_chan *chan, size_t base) {
     return SYS_ERR_OK;
 }
 
+// static void ump_print(struct ump_chan *chan) {
+//     debug_printf("circular buffer with head %d and tail %d\n", chan->head, chan->tail);
+//     for (int i = 0; i < 10; i++) {
+//         // get the current cache line
+//         struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + 64 * i);
+
+//         if (cl->valid) {
+//             dmb();
+//             debug_printf("line of type %d\n", ((struct ump_payload *)(cl->payload))->type);
+//         } else {
+//             debug_printf("invalid line\n");
+//         }
+//     }
+// }
+
 // add a message to the ump channel
 errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
     //debug_printf("sending on address %p\n", chan);
@@ -167,6 +182,8 @@ errval_t ump_send(struct ump_chan *chan, char *buf, size_t size) {
     dmb();
     cl->valid = 1;
 
+    //ump_print(chan);
+
     return SYS_ERR_OK;
 }
 
@@ -186,7 +203,12 @@ errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf) {
 
     // inspect the message to make sure it's the correct type
     if (((struct ump_payload *)(cl->payload))->type != type) {
-        return LIB_ERR_NO_UMP_MSG;
+        // ump_send(chan, cl->payload, sizeof(cl->payload));
+        // chan->tail = (chan->tail + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
+        // cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
+        // debug_printf("shifting things...\n");
+
+        return LIB_ERR_BIND_UMP_REPLY;
     }
     
     // copy out the received message
@@ -197,6 +219,9 @@ errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf) {
 
     // advance tail to next available cache line in circular buffer
     chan->tail = (chan->tail + sizeof(struct cache_line)) % BASE_PAGE_SIZE;
+    debug_printf("new tail offset: %d\n", chan->tail);
+
+    //ump_print(chan);
 
     return SYS_ERR_OK;
 }

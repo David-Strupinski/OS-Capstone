@@ -605,17 +605,36 @@ bsp_main(int argc, char *argv[]) {
         }
 
         // poll for UMP messages
-        for (int i = 1; i < 4; i++) {
+        for (int core = 1; core <= 3; core++) {
             struct ump_payload payload;
-            err = ump_receive(get_ump_chan_mon(i, 0), SPAWN_CMDLINE, &payload);
-            if (err == SYS_ERR_OK) {
-                domainid_t pid;
+            err = ump_receive(get_ump_chan_mon(core, 0), SPAWN_CMDLINE, &payload);
+            if (err == LIB_ERR_UMP_CHAN_RECV) {
+                err = ump_receive(get_ump_chan_mon(core, 0), PID_ACK, &payload);
+
+                // if this ack is for us, put it back, else forward it
+                if (payload.recv_core == my_core_id) {
+                    err = ump_send(get_ump_chan_mon(payload.send_core, 0), (char *)&payload, sizeof(payload));
+                    if (err_is_fail(err)) {
+                        debug_printf("couldn't put an ack back on the queue\n");
+                        abort();
+                    }
+                }
+            }
+            if (err_is_fail(err)) {
+                continue;
+            }
+
+            domainid_t pid;
+
+            // if this core is the recv core, spawn the process and send an ack
+            if (payload.recv_core == my_core_id) {
                 err = proc_mgmt_spawn_with_cmdline(payload.payload, payload.recv_core, &pid);
                 if (err_is_fail(err)) {
                     debug_printf("couldn't spawn a process\n");
                     abort();
                 }
 
+                // setup ack
                 struct ump_payload recv_msg;
                 recv_msg.type = PID_ACK;
                 recv_msg.recv_core = payload.send_core;
@@ -623,7 +642,20 @@ bsp_main(int argc, char *argv[]) {
                 memcpy(&recv_msg.payload, &pid, sizeof(pid));
 
                 // forward the ack to the correct core
-                ump_send(get_ump_chan_mon(recv_msg.recv_core, 1), (char *)&recv_msg, sizeof(recv_msg));
+                err = ump_send(get_ump_chan_mon(recv_msg.recv_core, 1), (char *)&recv_msg, sizeof(recv_msg));
+                if (err_is_fail(err)) {
+                    debug_printf("couldn't send an ack\n");
+                    abort();
+                }
+
+                continue;
+            }
+
+            // else, forward the message to the correct core
+            err = ump_send(get_ump_chan_mon(payload.recv_core, 1), (char *)&payload, sizeof(payload));
+            if (err_is_fail(err)) {
+                debug_printf("couldn't forward a message\n");
+                abort();
             }
         }
 
@@ -725,24 +757,36 @@ app_main(int argc, char *argv[]) {
         // check for a UMP message
         struct ump_payload payload;
         err = ump_receive(get_ump_chan_core(1), SPAWN_CMDLINE, &payload);
-        if (err == SYS_ERR_OK) {
-            // spawn a process
+        if (err_is_fail(err)) {
+            continue;
+        }
+
+        // if this core is the recv core, spawn the process and send an ack
+        if (payload.recv_core == my_core_id) {
             domainid_t pid;
-            err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &pid);
+            err = proc_mgmt_spawn_with_cmdline(payload.payload, payload.recv_core, &pid);
             if (err_is_fail(err)) {
                 debug_printf("couldn't spawn a process\n");
                 abort();
             }
 
-            // send an ack with the pid
-            struct ump_payload pid_payload;
-            pid_payload.type = PID_ACK;
-            pid_payload.send_core = my_core_id;
-            pid_payload.recv_core = payload.send_core;
-            memcpy(&(pid_payload.payload), &pid, sizeof(pid));
-            err = ump_send(get_ump_chan_core(0), (char *)&pid_payload, sizeof(pid_payload));
-            DEBUG_ERR_ON_FAIL(err, "couldn't send back PID\n");
+            // setup ack
+            struct ump_payload recv_msg;
+            recv_msg.type = PID_ACK;
+            recv_msg.recv_core = payload.send_core;
+            recv_msg.send_core = my_core_id;
+            memcpy(&recv_msg.payload, &pid, sizeof(pid));
+
+            // forward the ack to the correct core
+            err = ump_send(get_ump_chan_core(recv_msg.recv_core), (char *)&recv_msg, sizeof(recv_msg));
+            if (err_is_fail(err)) {
+                debug_printf("couldn't send an ack\n");
+                abort();
+            }
+
+            continue;
         }
+
         thread_yield();
     }
 

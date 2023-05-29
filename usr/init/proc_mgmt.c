@@ -170,6 +170,20 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     return SYS_ERR_OK;
 }
 
+static errval_t spawn_with_cmdline_same_core(const char *cmdline, domainid_t *pid) {
+    errval_t err;
+
+    // parse command line properly
+    const char *argv[MAX_CMDLINE_ARGS];
+    argv[0] = cmdline;
+    int argc = 0;
+    err = parse_args(cmdline, &argc, (char **)argv);
+    DEBUG_ERR_ON_FAIL(err, "couldn't parse args\n");
+    err = proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, my_core_id, pid);
+    DEBUG_ERR_ON_FAIL(err, "couldn't spawn with caps\n");
+    return SYS_ERR_OK;
+}
+
 
 /**
  * @brief spawns a new process with the given commandline arguments on the given core
@@ -186,63 +200,106 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
 {
     errval_t err;
 
-    // Note: With multicore support, you many need to send a message to the other core
-    if (core != my_core_id) {
-        // set up a message to send to another core
-        struct ump_payload send_msg;
-        send_msg.type = SPAWN_CMDLINE;
-        send_msg.send_core = my_core_id;
-        send_msg.recv_core = core;
-        strncpy(send_msg.payload, cmdline, 128);
-        if (my_core_id == 0) {
-            // send directly to app core
-            debug_printf("sending spawn message from bsp to core %d\n", core);
-            ump_send(get_ump_chan_mon(core, 1), (char *)&send_msg, sizeof(struct ump_payload));
-
-            // wait for response and set the pid
-            struct ump_payload recv_msg;
-            while (true) {
-                err = ump_receive(get_ump_chan_mon(core, 0), PID_ACK, &recv_msg);
-                if (err == SYS_ERR_OK) {
-                    // debug_printf("got pid %d\n", *(domainid_t *)recv_msg.payload);
-                    *pid = *(domainid_t *)recv_msg.payload;
-
-                    break;
-                }
-                thread_yield();
-            }
-        } else {
-            // send to bsp core to forward to app core
-            err = ump_send(get_ump_chan_core(0), (char *)&send_msg, sizeof(struct ump_payload));
-            DEBUG_ERR_ON_FAIL(err, "couldn't send spawn message to bsp\n");
-
-            // // wait for response and set the pid
-            // struct ump_payload recv_msg;
-            // while (true) {
-            //     err = ump_receive(get_ump_chan_core(1), PID_ACK, &recv_msg);
-            //     if (err == SYS_ERR_OK) {
-            //         debug_printf("got pid %d\n", *(domainid_t *)recv_msg.payload);
-            //         *pid = *(domainid_t *)recv_msg.payload;
-            //         break;
-            //     }
-            //     debug_printf("error: %s\n", err_getstring(err));
-            //     thread_yield();
-            // }
-        }
-
-        return SYS_ERR_OK;
+    if (my_core_id == core) {
+        // spawn on the same core
+        return spawn_with_cmdline_same_core(cmdline, pid);
     }
 
-    //debug_printf("trying to spawn a process on the same core\n");
-    
-    // parse command line properly
-    const char *argv[MAX_CMDLINE_ARGS];
-    argv[0] = cmdline;
-    int argc = 0;
-    err = parse_args(cmdline, &argc, (char **)argv);
-    DEBUG_ERR_ON_FAIL(err, "couldn't parse args\n");
-    err = proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, core, pid);
-    DEBUG_ERR_ON_FAIL(err, "couldn't spawn with caps\n");
+    // Note: With multicore support, you many need to send a message to the other core
+    // set up a message to send to another core
+    struct ump_payload send_msg;
+    send_msg.type = SPAWN_CMDLINE;
+    send_msg.send_core = my_core_id;
+    send_msg.recv_core = core;
+    strncpy(send_msg.payload, cmdline, 128);
+
+    if (my_core_id == 0) {
+        // send directly to app core
+        debug_printf("sending spawn message from bsp to core %d\n", core);
+        err = ump_send(get_ump_chan_mon(core, 1), (char *)&send_msg, sizeof(struct ump_payload));
+        DEBUG_ERR_ON_FAIL(err, "couldn't send spawn message to app core\n");
+
+        // wait for response and set the pid
+        struct ump_payload recv_msg;
+        debug_printf("waiting for pid from core %d\n", core);
+        while (true) {
+            err = ump_receive(get_ump_chan_mon(core, 0), PID_ACK, &recv_msg);
+            if (err == SYS_ERR_OK) {
+                // debug_printf("got pid %d\n", *(domainid_t *)recv_msg.payload);
+
+                // if recv_msg's recv_core is not core, then we need to forward the message
+                if (recv_msg.recv_core != my_core_id) {
+                    debug_printf("forwarding pid to core %d\n", recv_msg.recv_core);
+                    err = ump_send(get_ump_chan_mon(recv_msg.recv_core, 1), (char *)&recv_msg, sizeof(struct ump_payload));
+                    DEBUG_ERR_ON_FAIL(err, "couldn't send spawn message to app core\n");
+                } else {
+                    *pid = *(domainid_t *)recv_msg.payload;
+                }
+                break;
+            } else if (err == LIB_ERR_UMP_CHAN_RECV) {
+                // another message needs to be processed first
+                debug_printf("another message needs to be processed first\n");
+                err = ump_receive(get_ump_chan_mon(core, 0), SPAWN_CMDLINE, &recv_msg);
+                if (err == SYS_ERR_OK) {
+                    domainid_t spawn_pid;
+                    err = spawn_with_cmdline_same_core(recv_msg.payload, &spawn_pid);
+                    if (err_is_fail(err)) {
+                        continue;
+                    }
+
+                    // send pid back in ack
+                    struct ump_payload ack_msg;
+                    ack_msg.type = PID_ACK;
+                    ack_msg.send_core = my_core_id;
+                    ack_msg.recv_core = recv_msg.send_core;
+                    *(domainid_t *)ack_msg.payload = spawn_pid;
+                    err = ump_send(get_ump_chan_mon(recv_msg.send_core, 1), (char *)&ack_msg, sizeof(struct ump_payload));
+                    DEBUG_ERR_ON_FAIL(err, "couldn't send ack message to app core\n");
+                    debug_printf("successfully sent ack for intermediate message\n");
+                }
+            }
+            thread_yield();
+        }
+    } else {
+        // send to bsp core to forward to app core
+        debug_printf("sending spawn message from core %d to bsp\n", my_core_id);
+        err = ump_send(get_ump_chan_core(0), (char *)&send_msg, sizeof(struct ump_payload));
+        DEBUG_ERR_ON_FAIL(err, "couldn't send spawn message to bsp\n");
+
+        // wait for response and set the pid
+        struct ump_payload recv_msg;
+        while (true) {
+            err = ump_receive(get_ump_chan_core(1), PID_ACK, &recv_msg);
+            if (err == SYS_ERR_OK) {
+                // debug_printf("got pid %d\n", *(domainid_t *)recv_msg.payload);
+                *pid = *(domainid_t *)recv_msg.payload;
+                break;
+            } else if (err == LIB_ERR_UMP_CHAN_RECV) {
+                debug_printf("another message needs to be processed first\n");
+                err = ump_receive(get_ump_chan_core(1), SPAWN_CMDLINE, &recv_msg);
+                if (err == SYS_ERR_OK) {
+                    domainid_t spawn_pid;
+                    err = spawn_with_cmdline_same_core(recv_msg.payload, &spawn_pid);
+                    if (err_is_fail(err)) {
+                        continue;
+                    }
+
+                    // send pid back in ack
+                    struct ump_payload ack_msg;
+                    ack_msg.type = PID_ACK;
+                    ack_msg.send_core = my_core_id;
+                    ack_msg.recv_core = recv_msg.send_core;
+                    *(domainid_t *)ack_msg.payload = spawn_pid;
+                    err = ump_send(get_ump_chan_core(0), (char *)&ack_msg, sizeof(struct ump_payload));
+                    DEBUG_ERR_ON_FAIL(err, "couldn't send ack message to app core\n");
+                    debug_printf("successfully sent ack for intermediate message\n");
+                    // ump_print(get_ump_chan_core(1));
+                }
+            }
+            thread_yield();
+        }
+    }
+
     return SYS_ERR_OK;
 }
 

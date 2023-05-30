@@ -58,7 +58,7 @@ static inline void mackerel_write_io_32( mackerel_io_t base, int offset, uint32_
 
 #include <stdio.h>
 #include <stdint.h>
-#include <arch/x86/barrelfish/iocap_arch.h>
+// #include <arch/x86/barrelfish/iocap_arch.h>
 
 /*
  * Reading from I/O space

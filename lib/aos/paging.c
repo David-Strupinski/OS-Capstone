@@ -364,6 +364,7 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     //  - keep it simple: use a linear allocator like st->vaddr_start += ...
 
     // find and reserve an empty area of the virtual address space
+    // debug_printf("paging_map_frame_attr_offset: mapping %d bytes\n", bytes);
     err = paging_alloc(st, buf, bytes, BASE_PAGE_SIZE);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate a page for mapping\n");
     
@@ -371,7 +372,7 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     genvaddr_t vaddr = (genvaddr_t)*buf;
     err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
     if (err_is_fail(err)) {
-        printf("vnode_map failed: %s\n", err_getstring(err));
+        debug_printf("vnode_map failed: %s\n", err_getstring(err));
         return err;
     }
     
@@ -446,7 +447,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             // table of the type provided to the page table provided
             err = mapNewPT(st, VMSAv8_64_L0_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l1, st->root);
             if (err_is_fail(err)) {
-                printf("pt_alloc_l1 failed: %s\n", err_getstring(err));
+                debug_printf("pt_alloc_l1 failed: %s\n", err_getstring(err));
                 return err;
             }
         }
@@ -456,7 +457,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
             err = mapNewPT(st, VMSAv8_64_L1_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l2, 
                      st->root->children[VMSAv8_64_L0_INDEX(vaddr)]);
             if (err_is_fail(err)) {
-                printf("pt_alloc_l2 failed: %s\n", err_getstring(err));
+                debug_printf("pt_alloc_l2 failed: %s\n", err_getstring(err));
                 return err;
             }
         }
@@ -467,7 +468,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
                      st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                children[VMSAv8_64_L1_INDEX(vaddr)]);
             if (err_is_fail(err)) {
-                printf("pt_alloc_l3 failed: %s\n", err_getstring(err));
+                debug_printf("pt_alloc_l3 failed: %s\n", err_getstring(err));
                 return err;
             }
         }
@@ -492,7 +493,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
                                   VMSAv8_64_L3_INDEX(vaddr), flags, 
                                   offset + (BASE_PAGE_SIZE * (originalNumPages - numPages)), numMapped, mapping);
         if (err_is_fail(err)) {
-            printf("vnode_map failed mapping leaf node: %s\n", err_getstring(err));
+            debug_printf("vnode_map failed mapping leaf node: %s\n", err_getstring(err));
             return err;
         }
 
@@ -522,7 +523,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         // refill the slab if necessary
         err = slab_check_and_refill(&(st->ma));
         if (err_is_fail(err)) {
-            printf("slab alloc error: %s\n", err_getstring(err));
+            debug_printf("slab alloc error: %s\n", err_getstring(err));
             return LIB_ERR_SLAB_REFILL;
         }
     }

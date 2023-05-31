@@ -320,8 +320,17 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
     if (err_is_fail(err)) {
         return err_push(err, LIB_ERR_SLOT_ALLOC);
     }
-    pt_alloc(st, type, &(parent->children[slot]->self));
-
+    err = pt_alloc(st, type, &(parent->children[slot]->self));
+    if (err_is_fail(err)) {
+        debug_printf("cap that fails: \n");
+        debug_printf("type: %d\n", type);
+        // debug_print_cap_at_capref(parent->children[slot]->self);
+        debug_printf("slot: %d\n", parent->children[slot]->self.slot);
+        debug_printf("level: %d\n", parent->children[slot]->self.cnode.level);
+        debug_printf("croot: %p\n", parent->children[slot]->self.cnode.croot);
+        debug_printf("cnode: %p\n", parent->children[slot]->self.cnode.cnode);
+        DEBUG_ERR_ON_FAIL(err, "pt_alloc failed\n");
+    }
     
     err = vnode_map(parent->self, parent->children[slot]->self, 
                     slot, VREGION_FLAGS_READ_WRITE, offset, pte_ct, mapping);
@@ -423,22 +432,6 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
     int originalNumPages = ROUND_UP(bytes, BASE_PAGE_SIZE) / BASE_PAGE_SIZE;
     int numPages = originalNumPages;
 
-    // // detect duplicate mappings
-    // for (int checkPage = 0; checkPage < originalNumPages; checkPage++) {
-    //     if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)] != NULL &&
-    //             st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
-    //                       children[VMSAv8_64_L1_INDEX(vaddr)] != NULL &&
-    //             st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
-    //                       children[VMSAv8_64_L1_INDEX(vaddr)]->
-    //                       children[VMSAv8_64_L2_INDEX(vaddr)] != NULL &&
-    //             st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
-    //                       children[VMSAv8_64_L1_INDEX(vaddr)]->
-    //                       children[VMSAv8_64_L2_INDEX(vaddr)]->
-    //                       children[VMSAv8_64_L3_INDEX(vaddr)] != NULL) {
-    //         return LIB_ERR_VSPACE_REGION_OVERLAP;
-    //     }
-    // }
-
     // map pages in L3 page table-sized chunks
     for (int i = 0; numPages > 0; i++) {
         // If necessary allocate and initialize a new L1 pagetable
@@ -464,6 +457,8 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         // If necessary allocate and initialize a new L3 pagetable
         if (st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->
                       children[VMSAv8_64_L2_INDEX(vaddr)] == NULL) {
+            // debug_printf("mapping new L3 PT, L2: %d\n", VMSAv8_64_L2_INDEX(vaddr));
+            // debug_print_cap_at_capref(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->children[VMSAv8_64_L1_INDEX(vaddr)]->self);
             err = mapNewPT(st, VMSAv8_64_L2_INDEX(vaddr), offset, 1, ObjType_VNode_AARCH64_l3, 
                      st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
                                children[VMSAv8_64_L1_INDEX(vaddr)]);
@@ -482,7 +477,7 @@ errval_t paging_map_fixed_attr_offset(struct paging_state *st, lvaddr_t vaddr, s
         }
 
         // map the maximum number of pages that we can fit in this L3 page table
-        //debug_printf("awful capref at L0 index %d L1 index %d L2 index %d and L3 index %d:\n", VMSAv8_64_L0_INDEX(vaddr), VMSAv8_64_L1_INDEX(vaddr),VMSAv8_64_L2_INDEX(vaddr), VMSAv8_64_L3_INDEX(vaddr));
+        // debug_printf("awful capref at L0 index %d L1 index %d L2 index %d and L3 index %d:\n", VMSAv8_64_L0_INDEX(vaddr), VMSAv8_64_L1_INDEX(vaddr),VMSAv8_64_L2_INDEX(vaddr), VMSAv8_64_L3_INDEX(vaddr));
         // debug_print_cap_at_capref(st->root->children[VMSAv8_64_L0_INDEX(vaddr)]->
         //                           children[VMSAv8_64_L1_INDEX(vaddr)]->
         //                           children[VMSAv8_64_L2_INDEX(vaddr)]->self);

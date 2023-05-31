@@ -48,6 +48,7 @@ static errval_t pt_alloc(struct paging_state *st, enum objtype type, struct capr
     // try to get a slot from the slot allocator to hold the new page table
     err = st->slot_alloc->alloc(st->slot_alloc, ret);
     if (err_is_fail(err)) {
+        debug_printf("pt_alloc failed after slot_alloc\n");
         return err_push(err, LIB_ERR_SLOT_ALLOC);
     }
 
@@ -308,12 +309,17 @@ errval_t paging_alloc(struct paging_state *st, void **buf, size_t bytes, size_t 
 }
 
 
-errval_t mapNewPT(struct paging_state * st, capaddr_t slot, 
-                  uint64_t offset, uint64_t pte_ct, enum objtype type, struct pageTable * parent) {
+errval_t mapNewPT(struct paging_state *st, capaddr_t slot, 
+                  uint64_t offset, uint64_t pte_ct, enum objtype type, struct pageTable *parent) {
     errval_t err;
 
-    //slab_check_and_refill(&(st->ma));
+    // err = slab_check_and_refill(&(st->ma));
+    // DEBUG_ERR_ON_FAIL(err, "slab_check_and_refill failed\n");
+
     parent->children[slot] = (struct pageTable*)slab_alloc(&(st->ma));
+    if (parent->children[slot] == NULL) {
+        DEBUG_ERR_ON_FAIL(LIB_ERR_SLAB_ALLOC_FAIL, "slab_alloc failed\n");
+    }
     
     struct capref mapping;
     err = st->slot_alloc->alloc(st->slot_alloc, &mapping);
@@ -323,11 +329,11 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
     err = pt_alloc(st, type, &(parent->children[slot]->self));
     if (err_is_fail(err)) {
         debug_printf("cap that fails: \n");
-        debug_printf("type: %d\n", type);
-        // debug_print_cap_at_capref(parent->children[slot]->self);
+        // debug_printf("type: %d\n", type);
+        debug_print_cap_at_capref(parent->children[slot]->self);
         debug_printf("slot: %d\n", parent->children[slot]->self.slot);
         debug_printf("level: %d\n", parent->children[slot]->self.cnode.level);
-        debug_printf("croot: %p\n", parent->children[slot]->self.cnode.croot);
+        // debug_printf("croot: %p\n", parent->children[slot]->self.cnode.croot);
         debug_printf("cnode: %p\n", parent->children[slot]->self.cnode.cnode);
         DEBUG_ERR_ON_FAIL(err, "pt_alloc failed\n");
     }
@@ -335,7 +341,7 @@ errval_t mapNewPT(struct paging_state * st, capaddr_t slot,
     err = vnode_map(parent->self, parent->children[slot]->self, 
                     slot, VREGION_FLAGS_READ_WRITE, offset, pte_ct, mapping);
     if (err_is_fail(err)) {
-        printf("     vnode_map failed mapping: %s\n", err_getstring(err));
+        debug_printf("vnode_map failed mapping: %s\n", err_getstring(err));
         return -1;
     }
 
@@ -382,6 +388,9 @@ errval_t paging_map_frame_attr_offset(struct paging_state *st, void **buf, size_
     err = paging_map_fixed_attr_offset(st, vaddr, frame, bytes, offset, flags);
     if (err_is_fail(err)) {
         debug_printf("vnode_map failed: %s\n", err_getstring(err));
+        debug_printf("vaddr: %d, bytes: %d, offset: %d\n", vaddr, bytes, offset);
+        debug_printf("frame: \n");
+        debug_print_cap_at_capref(frame);
         return err;
     }
     

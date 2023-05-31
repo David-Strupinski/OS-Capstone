@@ -53,7 +53,7 @@ struct pageTable {
     struct pageTable * children[NUM_PT_SLOTS];
 };
 
-#define NUM_PTS_ALLOC 64
+#define NUM_PTS_ALLOC 512
 #define VADDR_CALCULATE(L0, L1, L2, L3, offset)                                                    \
     (offset) + (((int64_t)(L3)) << 12) + (((int64_t)(L2)) << 21) + (((int64_t)(L1)) << 30) + (((int64_t)(L0)) << 39);
 
@@ -70,7 +70,7 @@ struct paging_state {
     struct slab_allocator ma;       ///< Slab allocator for metadata
     char slab_buf[SLAB_STATIC_SIZE(NUM_PTS_ALLOC, sizeof(struct pageTable))];
     
-    struct pageTable * root;
+    struct pageTable *root;
 };
 
 

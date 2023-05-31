@@ -124,7 +124,10 @@ errval_t grading_run_tests_urpc(void)
         send_ack(1, 2, 42);
         debug_printf("long payload: %s, len: %d\n", payload.payload, strlen(payload.payload));
         if (strlen(payload.payload) == 86) {
-            grading_test_pass("U1-2", "received long spawn request from core 1\n");
+            domainid_t hello_pid;
+            err = proc_mgmt_spawn_with_cmdline(payload.payload, disp_get_core_id(), &hello_pid);
+            DEBUG_ERR_ON_FAIL(err, "proc_mgmt_spawn_with_cmdline");
+            grading_test_pass("U1-2", "received long spawn request from core 1, pid: %d\n", hello_pid);
         }
     }
 

@@ -201,9 +201,7 @@ errval_t ump_receive(struct ump_chan *chan, enum msg_type type, void *buf) {
 
     // if the tail msg type is not the type we're looking for, return
     struct cache_line *cl = (struct cache_line *)((genvaddr_t)chan + chan->base + chan->tail);
-
     if (!cl->valid) {
-        USER_PANIC("invalid cache line");
         return LIB_ERR_NO_UMP_MSG;
     }
 

@@ -26,13 +26,17 @@
 #include <grading/io.h>
 #include <spawn/spawn.h>
 
-#include "mem_alloc.h"
 #include "coreboot.h"
+#include <drivers/lpuart.h>
+#include "mem_alloc.h"
 #include <proc_mgmt/proc_mgmt.h>
 
 #include "proc_mgmt.h"
 
 #include <barrelfish_kpi/startup_arm.h>
+
+#include <maps/qemu_map.h>
+#include <maps/imx8x_map.h>
 
 void gen_recv_handler(void *arg)
 {
@@ -594,6 +598,59 @@ bsp_main(int argc, char *argv[]) {
     //   - full functionality of the system
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
+
+    // get the devframe passed to init
+    struct capref devframe;
+    devframe.cnode = cnode_task;
+    devframe.slot = TASKCN_SLOT_DEV;
+    debug_print_cap_at_capref(devframe);
+
+    struct capability devframe_cap;
+    err = cap_direct_identify(devframe, &devframe_cap);
+    DEBUG_ERR_ON_FAIL(err, "couldn't identify devframe\n");
+
+    // retype the devframe using the base and size in the devices header
+    // to return a capref to the UART registers
+    struct capref uart_frame;
+    err = slot_alloc(&uart_frame);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate slot for UART frame\n");
+    switch (platform_info.platform) {
+        case PI_PLATFORM_IMX8X: {
+            err = cap_retype(uart_frame, devframe, IMX8X_UART3_BASE - devframe_cap.u.devframe.base, ObjType_DevFrame, QEMU_UART_SIZE);
+            break;
+        }
+        case PI_PLATFORM_QEMU: {
+            err = cap_retype(uart_frame, devframe, QEMU_UART_BASE - devframe_cap.u.devframe.base, ObjType_DevFrame, QEMU_UART_SIZE);
+            break;
+        }
+        default:
+            debug_printf("Unsupported platform\n");
+            return LIB_ERR_NOT_IMPLEMENTED;
+    }
+    if (err_is_fail(err)) {
+        debug_printf(err_getstring(err));
+        abort();
+    }
+    DEBUG_ERR_ON_FAIL(err, "couldn't retype devframe\n");
+
+    // map the returned devframe
+    void *uart_buf;
+    err = paging_map_frame_attr(get_current_paging_state(), &uart_buf, QEMU_UART_SIZE, uart_frame, 
+                                VREGION_FLAGS_READ_WRITE_NOCACHE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map uart frame\n");
+
+    // initialize lpuart
+    struct lpuart_s *uart;
+    err = lpuart_init(&uart, uart_buf);
+    if (err_is_fail(err)) {
+        debug_printf("error: %s\n", err_getstring(err));
+        abort();
+    }
+    DEBUG_ERR_ON_FAIL(err, "couldn't initialize lpuart\n");
+
+    for (int i = 0; i < 60; i++) {
+        err = lpuart_putchar(uart, '!');
+    }
 
     // Hang around
     struct waitset *default_ws = get_default_waitset();

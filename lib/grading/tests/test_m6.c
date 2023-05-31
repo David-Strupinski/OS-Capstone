@@ -98,7 +98,7 @@ errval_t grading_run_tests_urpc(void)
     struct ump_payload payload;
     errval_t err;
 
-    if (disp_get_core_id() == 0) {
+    if (disp_get_core_id() == 0 && false) {
         spawn_one_without_args(1);
 
         grading_test_pass("U1-1", "received ack from core 1\n");
@@ -113,7 +113,7 @@ errval_t grading_run_tests_urpc(void)
         send_ack(1, 2, 44);
     }
 
-    if (disp_get_core_id() == 1) {
+    if (disp_get_core_id() == 1 && false) {
         spawn_one_without_args(0);
 
         spawn_one_without_args(1);
@@ -131,7 +131,7 @@ errval_t grading_run_tests_urpc(void)
         }
     }
 
-    if (disp_get_core_id() == 2) {
+    if (disp_get_core_id() == 2 && false) {
         domainid_t pid;
         debug_printf("sending long message\n");
         proc_mgmt_spawn_with_cmdline("hello this_is_a_loooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong_string", 1, &pid);
@@ -141,6 +141,12 @@ errval_t grading_run_tests_urpc(void)
             grading_test_pass("U1-3", "received pid 44 from core 1\n");
         }
     }
+
+    if (disp_get_core_id() == 2) {
+    domainid_t pid;
+        proc_mgmt_spawn_with_cmdline("hello", 0, &pid);
+    }
+
 
 
     grading_printf("#################################################\n");

@@ -143,7 +143,7 @@ errval_t grading_run_tests_urpc(void)
     }
 
     if (disp_get_core_id() == 2) {
-    domainid_t pid;
+        domainid_t pid;
         proc_mgmt_spawn_with_cmdline("hello", 0, &pid);
     }
 

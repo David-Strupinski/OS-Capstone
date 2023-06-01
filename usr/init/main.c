@@ -27,16 +27,18 @@
 #include <spawn/spawn.h>
 
 #include "coreboot.h"
-#include <drivers/lpuart.h>
 #include "mem_alloc.h"
 #include <proc_mgmt/proc_mgmt.h>
-
 #include "proc_mgmt.h"
 
 #include <barrelfish_kpi/startup_arm.h>
 
+#include <drivers/lpuart.h>
+#include <drivers/pl011.h>
+#include <drivers/gic_dist.h>
 #include <maps/qemu_map.h>
 #include <maps/imx8x_map.h>
+#include <aos/inthandler.h>
 
 void gen_recv_handler(void *arg)
 {
@@ -116,7 +118,6 @@ void gen_recv_handler(void *arg)
             event_dispatch(get_default_waitset());
             event_dispatch(get_default_waitset());
             break;
-            
         case STRING_MSG:
             // is string
             // debug_printf("is string\n");
@@ -610,46 +611,65 @@ bsp_main(int argc, char *argv[]) {
     DEBUG_ERR_ON_FAIL(err, "couldn't identify devframe\n");
 
     // retype the devframe using the base and size in the devices header
-    // to return a capref to the UART registers
-    struct capref uart_frame;
+    // to return a capref to the UART and GIC registers
+    bool qemu = platform_info.platform == PI_PLATFORM_QEMU;
+    struct capref uart_frame, gic_frame;
+    genvaddr_t uart_base, gic_base;
     err = slot_alloc(&uart_frame);
     DEBUG_ERR_ON_FAIL(err, "couldn't allocate slot for UART frame\n");
-    switch (platform_info.platform) {
-        case PI_PLATFORM_IMX8X: {
-            err = cap_retype(uart_frame, devframe, IMX8X_UART3_BASE - devframe_cap.u.devframe.base, ObjType_DevFrame, QEMU_UART_SIZE);
-            break;
-        }
-        case PI_PLATFORM_QEMU: {
-            err = cap_retype(uart_frame, devframe, QEMU_UART_BASE - devframe_cap.u.devframe.base, ObjType_DevFrame, QEMU_UART_SIZE);
-            break;
-        }
-        default:
-            debug_printf("Unsupported platform\n");
-            return LIB_ERR_NOT_IMPLEMENTED;
-    }
-    if (err_is_fail(err)) {
-        debug_printf(err_getstring(err));
-        abort();
-    }
-    DEBUG_ERR_ON_FAIL(err, "couldn't retype devframe\n");
+    err = slot_alloc(&gic_frame);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate slot for GIC frame\n");
+    uart_base = qemu ? QEMU_UART_BASE : IMX8X_UART3_BASE;
+    gic_base = qemu ? QEMU_GIC_DIST_BASE : IMX8X_GIC_DIST_BASE;
+    err = cap_retype(uart_frame, devframe, uart_base - devframe_cap.u.devframe.base, ObjType_DevFrame, QEMU_UART_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't retype UART from devframe\n");
+    err = cap_retype(gic_frame, devframe, gic_base - devframe_cap.u.devframe.base, ObjType_DevFrame, QEMU_GIC_DIST_SIZE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't retype GIC from devframe\n");
 
-    // map the returned devframe
+    // map the UART and the GIC
     void *uart_buf;
+    void *gic_buf;
     err = paging_map_frame_attr(get_current_paging_state(), &uart_buf, QEMU_UART_SIZE, uart_frame, 
                                 VREGION_FLAGS_READ_WRITE_NOCACHE);
-    DEBUG_ERR_ON_FAIL(err, "couldn't map uart frame\n");
+    DEBUG_ERR_ON_FAIL(err, "couldn't map UART frame\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &gic_buf, QEMU_GIC_DIST_SIZE, gic_frame, 
+                                VREGION_FLAGS_READ_WRITE_NOCACHE);
+    DEBUG_ERR_ON_FAIL(err, "couldn't map GIC frame\n");
 
-    // initialize lpuart
-    struct lpuart_s *uart;
-    err = lpuart_init(&uart, uart_buf);
+    // initialize GIC
+    struct gic_dist_s *gic;
+    err = gic_dist_init(&gic, gic_buf);
     if (err_is_fail(err)) {
         debug_printf("error: %s\n", err_getstring(err));
         abort();
     }
-    DEBUG_ERR_ON_FAIL(err, "couldn't initialize lpuart\n");
 
-    for (int i = 0; i < 60; i++) {
-        err = lpuart_putchar(uart, '!');
+    // set up interrupt handler
+    // TODO: this code doesn't seem to actually do anything...
+    struct capref dest_irq;
+    slot_alloc(&dest_irq);
+    err = inthandler_alloc_dest_irq_cap(PL011_UART0_INT, &dest_irq);
+    DEBUG_ERR_ON_FAIL(err, "couldn't get interrupt destination cap\n");
+    struct event_closure handler = {
+        .handler = NULL,
+        .arg = NULL,
+    };
+    err = inthandler_setup(dest_irq, get_default_waitset(), handler);
+    DEBUG_ERR_ON_FAIL(err, "couldn't attach interrupts to handler\n");
+
+    // initialize UART
+    if (qemu) {
+        struct pl011_s *uart;
+        err = pl011_init(&uart, uart_buf);
+        DEBUG_ERR_ON_FAIL(err, "couldn't initialize pl011_s\n");
+        err = pl011_enable_interrupt(uart);
+        DEBUG_ERR_ON_FAIL(err, "unable to enable pl011 interrupts\n");
+    } else {
+        struct lpuart_s *uart;
+        err = lpuart_init(&uart, uart_buf);
+        DEBUG_ERR_ON_FAIL(err, "couldn't initialize lpuart\n");
+        err = lpuart_enable_interrupt(uart);
+        DEBUG_ERR_ON_FAIL(err, "unable to enable lpuart interrupts\n");
     }
 
     // Hang around

@@ -81,14 +81,14 @@ static void libc_assert(const char *expression, const char *file,
 //     return len;
 // }
 
-__attribute__((__used__))
-static size_t dummy_terminal_read(char *buf, size_t len)
-{
-    (void)buf;
-    (void)len;
-    debug_printf("Terminal read NYI!\n");
-    return 0;
-}
+// __attribute__((__used__))
+// static size_t dummy_terminal_read(char *buf, size_t len)
+// {
+//     (void)buf;
+//     (void)len;
+//     debug_printf("Terminal read NYI!\n");
+//     return 0;
+// }
 
 __attribute__((__used__))
 static size_t aos_terminal_read(char *buf, size_t len)
@@ -109,6 +109,7 @@ static size_t aos_terminal_write(const char *buf, size_t len)
     size_t i = 0;
 
     while (i < len) {
+        if (buf[i] == '\n') aos_rpc_serial_putchar(aos_rpc_get_init_channel(), '\r');
         err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), buf[i]);
         if (err_is_fail(err)) {
             return i;

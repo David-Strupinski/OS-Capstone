@@ -40,6 +40,10 @@
 #include <maps/imx8x_map.h>
 #include <aos/inthandler.h>
 
+bool qemu;
+struct pl011_s *pl011;
+struct lpuart_s *lpuart;
+
 void gen_recv_handler(void *arg)
 {
     // debug_printf("received message\n");
@@ -186,7 +190,12 @@ void gen_recv_handler(void *arg)
                 // }
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
-            sys_print((char *) &msg.words[1], 1);
+            if (qemu) {
+                err = pl011_putchar(pl011, (char)msg.words[1]);
+            } else {
+                err = lpuart_putchar(lpuart, (char)msg.words[1]);
+            }
+            
             //grading_rpc_handler_serial_putchar(msg.words[1]);
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
             if (err_is_fail(err)) {
@@ -203,7 +212,13 @@ void gen_recv_handler(void *arg)
             }
 
             char c;
-            sys_getchar(&c);
+            do {
+                if (qemu) {
+                    err = pl011_getchar(pl011, &c);
+                } else {
+                    err = lpuart_getchar(lpuart, &c);
+                }
+            } while (err == LPUART_ERR_NO_DATA);
             grading_rpc_handler_serial_getchar();
 
             // build getchar response message payload
@@ -614,12 +629,7 @@ bsp_main(int argc, char *argv[]) {
         ump_chan_init((struct ump_chan *)ump_addr, ROUND_UP(ump_addr, BASE_PAGE_SIZE) - ump_addr + BASE_PAGE_SIZE);
     }
 
-    // calling late grading tests, required functionality up to here:
-    //   - full functionality of the system
-    // DO NOT REMOVE THE FOLLOWING LINE!
-    grading_test_late();
-
-    // get the devframe passed to init
+        // get the devframe passed to init
     struct capref devframe;
     devframe.cnode = cnode_task;
     devframe.slot = TASKCN_SLOT_DEV;
@@ -631,7 +641,7 @@ bsp_main(int argc, char *argv[]) {
 
     // retype the devframe using the base and size in the devices header
     // to return a capref to the UART and GIC registers
-    bool qemu = platform_info.platform == PI_PLATFORM_QEMU;
+    qemu = platform_info.platform == PI_PLATFORM_QEMU;
     struct capref uart_frame, gic_frame;
     genvaddr_t uart_base, gic_base;
     err = slot_alloc(&uart_frame);
@@ -678,18 +688,21 @@ bsp_main(int argc, char *argv[]) {
 
     // initialize UART
     if (qemu) {
-        struct pl011_s *uart;
-        err = pl011_init(&uart, uart_buf);
+        err = pl011_init(&pl011, uart_buf);
         DEBUG_ERR_ON_FAIL(err, "couldn't initialize pl011_s\n");
-        err = pl011_enable_interrupt(uart);
+        err = pl011_enable_interrupt(pl011);
         DEBUG_ERR_ON_FAIL(err, "unable to enable pl011 interrupts\n");
     } else {
-        struct lpuart_s *uart;
-        err = lpuart_init(&uart, uart_buf);
+        err = lpuart_init(&lpuart, uart_buf);
         DEBUG_ERR_ON_FAIL(err, "couldn't initialize lpuart\n");
-        err = lpuart_enable_interrupt(uart);
+        err = lpuart_enable_interrupt(lpuart);
         DEBUG_ERR_ON_FAIL(err, "unable to enable lpuart interrupts\n");
     }
+
+    // calling late grading tests, required functionality up to here:
+    //   - full functionality of the system
+    // DO NOT REMOVE THE FOLLOWING LINE!
+    grading_test_late();
 
     // spawn the shell
     domainid_t shell_pid;

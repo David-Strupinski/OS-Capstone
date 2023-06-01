@@ -25,20 +25,25 @@ int main(int argc, char *argv[]) {
     while (true) {
         aos_rpc_serial_putchar(rpc, '$');
         aos_rpc_serial_putchar(rpc, ' ');
-        for (length = 0; length < LINE_LENGTH; length++) {
+        length = 0;
+        while (length < LINE_LENGTH) {
             aos_rpc_serial_getchar(rpc, &c);
             aos_rpc_serial_putchar(rpc, c);
             line[length] = c;
             if (c == 127) {
-                // backspace was pressed
-                length -= 2;
-                aos_rpc_serial_putchar(rpc, '\b');
-                aos_rpc_serial_putchar(rpc, ' ');
-                aos_rpc_serial_putchar(rpc, '\b');
+                if (length > 0) {
+                    // backspace was pressed
+                    length--;
+                    aos_rpc_serial_putchar(rpc, '\b');
+                    aos_rpc_serial_putchar(rpc, ' ');
+                    aos_rpc_serial_putchar(rpc, '\b');
+                }
             } else if (c == '\r') {
                 // start a new line and evaluate the command
                 printf("\n");
                 break;
+            } else {
+                length++;
             }
         }
 

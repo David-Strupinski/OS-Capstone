@@ -197,10 +197,11 @@ errval_t proc_mgmt_get_status(domainid_t pid, struct proc_status *status)
  *
  * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
  */
-errval_t proc_mgmt_get_name(domainid_t pid, char *name, size_t len)
+errval_t proc_mgmt_get_name(domainid_t pid, char **name, size_t len)
 {
+    (void)len;
     struct aos_rpc *chan = aos_rpc_get_process_channel();
-    return aos_rpc_proc_get_name(chan, pid, name, len);
+    return aos_rpc_proc_get_name(chan, pid, name);
 }
 
 

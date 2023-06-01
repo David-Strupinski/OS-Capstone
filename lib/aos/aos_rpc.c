@@ -277,6 +277,30 @@ static void send_string_handler(void *arg)
     // debug_printf("string sent!\n");
 }
 
+static void send_get_name_handler(void *arg)
+{
+    // debug_printf("got into send string handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+    err = lmp_chan_send2(lc, 0, frame, NAME_MSG, len);
+    if (err_is_fail(err)) {
+        DEBUG_ERR(err, "sending name request in handler\n");
+        abort();
+    }
+
+    // debug_printf("string sent!\n");
+}
+
 static void send_getchar_handler(void *arg)
 {
     // debug_printf("got into send char handler\n");
@@ -940,15 +964,39 @@ errval_t aos_rpc_proc_get_status(struct aos_rpc *chan, domainid_t pid, coreid_t 
  *
  * @return SYS_ERR_OK on success, or error value on failure
  */
-errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char *name, size_t len)
+errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char **name)
 {
     // make compiler happy about unused parameters
     (void)chan;
     (void)pid;
     (void)name;
-    (void)len;
 
-    // why are all three of these input parameters? what are we supposed to do?
+    struct lmp_chan *lc = chan->lmp_chan;
+    errval_t err;
+
+    // allocate and map a frame, copying to it the string contents
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for name\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+
+    // pass the string frame and length in the payload
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = chan;
+    payload->frame = frame;
+    payload->len = pid;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_get_name_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    // set name and return
+    *name = buf;
     return SYS_ERR_OK;
 }
 

@@ -149,7 +149,27 @@ void gen_recv_handler(void *arg)
                 return;
             }
             break;
+        case NAME_MSG:
+            // is string
+            // debug_printf("is string\n");
+            while (err_is_fail(err)) {
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
+            }
 
+            // debug_printf("here is the length we recieved: %d\n", msg.words[1]);
+            // debug_print_cap_at_capref(remote_cap);
+            void *name_buf;
+            err = paging_map_frame_attr(get_current_paging_state(), &name_buf, BASE_PAGE_SIZE, remote_cap, VREGION_FLAGS_READ_WRITE);
+
+            // write process name into frame
+            proc_mgmt_get_name(msg.words[1], (char **)&name_buf, BASE_PAGE_SIZE);
+
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
+            break;
         case PUTCHAR:
             // putchar
             // debug_printf("recieved putchar message\n");

@@ -33,6 +33,7 @@ enum msg_type {
     SETUP_MSG,
     NUM_MSG,
     STRING_MSG,
+    NAME_MSG,
     PUTCHAR,
     GETCHAR,
     GETCHAR_ACK,
@@ -381,7 +382,7 @@ errval_t aos_rpc_proc_get_status(struct aos_rpc *chan, domainid_t pid, coreid_t 
  *
  * @return SYS_ERR_OK on success, or error value on failure
  */
-errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char *name, size_t len);
+errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char **name);
 
 
 /**

@@ -530,7 +530,7 @@ errval_t proc_mgmt_get_status(domainid_t pid, struct proc_status *status)
  *
  * @return SYS_ERR_OK on success, SPAWN_ERR_* on failure
  */
-errval_t proc_mgmt_get_name(domainid_t pid, char *name, size_t len)
+errval_t proc_mgmt_get_name(domainid_t pid, char **name, size_t len)
 {
     // make compiler happy about unused parameters
     (void)pid;
@@ -543,7 +543,7 @@ errval_t proc_mgmt_get_name(domainid_t pid, char *name, size_t len)
     while (curr != NULL) {
         if (curr->pid == pid) {
             // found our process
-            strcpy(name, curr->binary_name);
+            strcpy(*name, curr->binary_name);
             len = strlen(curr->binary_name);
         }
         curr = curr->next;

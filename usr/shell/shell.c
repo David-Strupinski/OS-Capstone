@@ -29,7 +29,14 @@ int main(int argc, char *argv[]) {
             aos_rpc_serial_getchar(rpc, &c);
             aos_rpc_serial_putchar(rpc, c);
             line[length] = c;
-            if (c == '\r') {
+            if (c == 127) {
+                // backspace was pressed
+                length -= 2;
+                aos_rpc_serial_putchar(rpc, '\b');
+                aos_rpc_serial_putchar(rpc, ' ');
+                aos_rpc_serial_putchar(rpc, '\b');
+            } else if (c == '\r') {
+                // start a new line and evaluate the command
                 printf("\n");
                 break;
             }
@@ -65,6 +72,40 @@ int main(int argc, char *argv[]) {
             // echo following token back to user
             if (num_tokens > 1) printf("%s", tokens[1]);
             printf("\n");
+        } else if (is_string(tokens[0], "run")) {
+            // spawn a process
+            if (num_tokens > 1) {
+                // create cmdline
+                char cmdline[LINE_LENGTH];
+                int cmdline_index = 0;
+                for (int i = 1; i < num_tokens; i++) {
+                    // ignore &
+                    if (i == num_tokens - 1 && is_string(tokens[i], "&")) continue;
+
+                    strcpy(&cmdline[cmdline_index], tokens[i]);
+                    cmdline_index += strlen(tokens[i]);
+                    cmdline[cmdline_index] = ' ';
+                    cmdline_index++;
+                }
+
+                // spawn the process
+                domainid_t pid;
+                errval_t err = aos_rpc_proc_spawn_with_cmdline(rpc, cmdline, disp_get_core_id(), &pid);
+                if (err_is_fail(err) || pid == 99999) {
+                    printf("unable to run %s\n", tokens[1]);
+                    continue;
+                }
+                barrelfish_usleep(100000);
+
+                // wait on the process if requested
+                if (!is_string(tokens[num_tokens - 1], "&")) {
+                    int status;
+                    aos_rpc_proc_wait(rpc, pid, &status);  // TODO: wait() only works when the process has exited...
+                    printf("%s exited with code %d\n", tokens[1], status);
+                }
+            } else {
+                printf("usage: run [cmdline] [&]\n");
+            }
         } else if (is_string(tokens[0], "ps")) {
             // print running processes
             printf("PID:\tName:\n");
@@ -76,6 +117,17 @@ int main(int argc, char *argv[]) {
                 aos_rpc_proc_get_name(rpc, pids[i], &proc_name);
                 printf("%d\t%s\n", pids[i], proc_name);
             }
+        } else if (is_string(tokens[0], "kill")) {
+            // kill a process
+            // TODO: implement actually killing a process...
+            if (num_tokens > 1) {
+                domainid_t pid = strtol(tokens[1], NULL, 10);
+                aos_rpc_proc_kill(rpc, pid);
+            } else {
+                printf("usage: kill [PID]\n");
+            }
+        } else {
+            printf("unknown command %s\n", tokens[0]);
         }
     }
     return EXIT_SUCCESS;

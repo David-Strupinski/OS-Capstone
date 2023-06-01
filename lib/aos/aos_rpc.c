@@ -498,14 +498,6 @@ static void send_wait_handler(void *arg) {
  */
 errval_t aos_rpc_send_number(struct aos_rpc *rpc, uintptr_t num)
 {
-    // make compiler happy about unused parameters
-    // debug_printf("send num\n");
-    (void)rpc;
-    (void)num;
-    // debug_printf("made it in to send num api\n");
-    // debug_printf("here is the number we are trying to send: %d\n", num);
-    // TODO: implement functionality to send a number over the channel
-    // given channel and wait until the ack gets returned.
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
 
@@ -1108,7 +1100,6 @@ errval_t aos_rpc_proc_exit(struct aos_rpc *rpc, int status)
     // make compiler happy about unused parameters
     (void)rpc;
     (void)status;
-    return SYS_ERR_OK;
     // TODO: implement the process exit RPC
 
     // I think this must be bonus becasue it involves killing a process

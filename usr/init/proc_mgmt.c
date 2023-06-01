@@ -149,7 +149,8 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     root = si;
     struct mem_region* module = multiboot_find_module(bi, argv[0]);
     if (module == NULL) {
-        debug_printf("multiboot_find_module failed to find %s\n", argv[0]);
+        // debug_printf("multiboot_find_module failed to find %s\n", argv[0]);
+        *pid = 99999;
         return SPAWN_ERR_FIND_MODULE;
     }
 
@@ -180,8 +181,7 @@ static errval_t spawn_with_cmdline_same_core(const char *cmdline, domainid_t *pi
     err = parse_args(cmdline, &argc, (char **)argv);
     DEBUG_ERR_ON_FAIL(err, "couldn't parse args\n");
     err = proc_mgmt_spawn_with_caps(argc, argv, 0, NULL, my_core_id, pid);
-    DEBUG_ERR_ON_FAIL(err, "couldn't spawn with caps\n");
-    return SYS_ERR_OK;
+    return err;
 }
 
 
@@ -244,7 +244,7 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
                     domainid_t spawn_pid;
                     err = spawn_with_cmdline_same_core(recv_msg.payload, &spawn_pid);
                     if (err_is_fail(err)) {
-                        continue;
+                        spawn_pid = 99999;
                     }
 
                     // send pid back in ack
@@ -619,6 +619,7 @@ errval_t proc_mgmt_resume(domainid_t pid)
 errval_t proc_mgmt_exit(int status)
 {
     // make compiler happy about unused parameters
+    debug_printf("exited");
     (void)status;
     USER_PANIC("FUNCIOTNALITY NOT IMPLENMENTED\n");
     return SYS_ERR_NOT_IMPLEMENTED;
@@ -640,12 +641,12 @@ errval_t proc_mgmt_terminated(domainid_t pid, int status)
     (void)pid;
     (void)status;
 
-    debug_printf("entering proc_mgmt_exit\n");
+    // debug_printf("entering proc_mgmt_exit\n");
     struct spawninfo * curr = root;
     while (curr != NULL) {
         if (curr->pid == pid) {
             // found our process
-            debug_printf("found our process, here is the exit code we are using: %d\n", status);
+            // debug_printf("found our process, here is the exit code we are using: %d\n", status);
             curr->exitcode = status;
             curr->state = SPAWN_STATE_TERMINATED;
             // TODO: actually kill the process (bonus)
@@ -673,19 +674,19 @@ errval_t proc_mgmt_wait(domainid_t pid, int *status)
     (void)status;
 
     struct spawninfo * curr = root;
-    debug_printf("spawn_state_terminated: %d, killed: %d\n", SPAWN_STATE_TERMINATED, SPAWN_STATE_KILLED);
+    // debug_printf("spawn_state_terminated: %d, killed: %d\n", SPAWN_STATE_TERMINATED, SPAWN_STATE_KILLED);
 
     while (curr != NULL) {
         if (curr->pid == pid) {
-            debug_printf("pid: %d, state: %d\n", curr->pid, curr->state);
+            // debug_printf("pid: %d, state: %d\n", curr->pid, curr->state);
             while(curr->state != SPAWN_STATE_TERMINATED && curr->state != SPAWN_STATE_KILLED) {
                 // wait;
-                debug_printf("waiting...\n");
-                //thread_yield();
+                //debug_printf("waiting...\n");
+                thread_yield();
                 // event_dispatch(get_default_waitset());
             }
             
-            debug_printf("heres the exit code from inside proc_mgmt_wait: %d\n", curr->exitcode);
+            // debug_printf("heres the exit code from inside proc_mgmt_wait: %d\n", curr->exitcode);
             *status = curr->exitcode;
             return SYS_ERR_OK;
         }

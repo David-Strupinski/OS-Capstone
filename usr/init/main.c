@@ -291,10 +291,9 @@ void gen_recv_handler(void *arg)
             // debug_printf("here is the string we recieved: %s\n", buf2);
             domainid_t our_pid;
             err = proc_mgmt_spawn_with_cmdline(buf2, msg.words[2], &our_pid);
-            if (err_is_fail(err)) {
-                debug_printf("spawn failed\n");
-                return;
-            }
+            // if (err_is_fail(err)) {
+            //     debug_printf("spawn failed\n");
+            // }
             payload->pid = our_pid;
             payload->rpc = rpc;
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_pid_handler, (void*) payload));

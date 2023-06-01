@@ -9,4 +9,4 @@ module /armv8/sbin/hello
 module /armv8/sbin/memeater
 module /armv8/sbin/rpcclient
 module /armv8/sbin/alloc
-
+module /armv8/sbin/shell

@@ -167,7 +167,7 @@ void gen_recv_handler(void *arg)
                 // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
             sys_print((char *) &msg.words[1], 1);
-            grading_rpc_handler_serial_putchar(msg.words[1]);
+            //grading_rpc_handler_serial_putchar(msg.words[1]);
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
             if (err_is_fail(err)) {
                 DEBUG_ERR(err, err_getstring(err));
@@ -671,6 +671,10 @@ bsp_main(int argc, char *argv[]) {
         err = lpuart_enable_interrupt(uart);
         DEBUG_ERR_ON_FAIL(err, "unable to enable lpuart interrupts\n");
     }
+
+    // spawn the shell
+    domainid_t shell_pid;
+    proc_mgmt_spawn_with_cmdline("shell", 0, &shell_pid);
 
     // Hang around
     struct waitset *default_ws = get_default_waitset();

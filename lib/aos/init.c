@@ -99,7 +99,6 @@ static size_t aos_terminal_read(char *buf, size_t len)
         err = aos_rpc_serial_getchar(aos_rpc_get_init_channel(), &buf[i]);
         if (err_is_fail(err)) return i;
     }
-
     return len;
 }
 
@@ -108,7 +107,6 @@ static size_t aos_terminal_write(const char *buf, size_t len)
 {
     errval_t err;
     size_t i = 0;
-    (void)buf;
 
     while (i < len) {
         err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), buf[i]);
@@ -117,7 +115,6 @@ static size_t aos_terminal_write(const char *buf, size_t len)
         }
         i++;
     }
-    // debug_printf("len: %d\n", i);
     return len;
 }
 
@@ -127,7 +124,6 @@ void barrelfish_libc_glue_init(void)
     // XXX: FIXME: Check whether we can use the proper kernel serial, and
     // what we need for that
     // TODO: change these to use the user-space serial driver if possible
-    // TODO: set these functions
     _libc_terminal_read_func = aos_terminal_read;
     _libc_terminal_write_func = aos_terminal_write;
     _libc_exit_func = libc_exit;

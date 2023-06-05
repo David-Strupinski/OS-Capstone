@@ -417,6 +417,29 @@ static void send_get_all_pids_handler(void* arg) {
     // debug_printf("get_all_pids request sent!\n");
 }
 
+static void send_get_elf_mod_names_handler(void* arg) {
+    // debug_printf("got into send get elf mod names handler\n");
+    
+    errval_t err;
+
+    // unpack the provided string and length
+    struct aos_rpc_string_payload *payload = (struct aos_rpc_string_payload *) arg;
+    struct aos_rpc *rpc = payload->rpc;
+    struct capref frame = payload->frame;
+    size_t len = payload->len;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    // debug_printf("printing frame:\n");
+    // debug_print_cap_at_capref(frame);
+
+    err = lmp_chan_send2(lc, 0, frame, GET_MOD_NAMES, len);
+    while (err_is_fail(err)) {
+        DEBUG_ERR(err, "sending get elf mod names request in handler\n");
+        abort();
+    }
+
+    // debug_printf("get_elf_mod_names request sent!\n");
+}
+
 static void send_get_pid_handler(void *arg) {
     // debug_printf("got into send get pid handler\n");
     
@@ -911,6 +934,58 @@ errval_t aos_rpc_proc_get_all_pids(struct aos_rpc *rpc, domainid_t **pids, size_
     // debug_printf("here are the pids:\n");
     *pids = output->pids;
     *pid_count = output->num_pids;
+
+    free(payload);
+    return SYS_ERR_OK;
+}
+
+/**
+ * @brief obtains a list of all elf memory modules in the system
+ *
+ * @param[in]  chan       the RPC channel to use (process channel)
+ * @param[out] names       array of strings of all elf mem module names in the system (freed by caller)
+ * @param[out] name_count  the number of names in the list
+ *
+ * @return SYS_ERR_OK on success, or error value on failure
+ */
+errval_t aos_rpc_list_elf_mod_names(struct aos_rpc *rpc, 
+                                    char (**names)[][MOD_NAME_LEN], 
+                                    int *name_count)
+{
+    // make compiler happy about unused parameters
+    (void)rpc;
+    (void)names;
+    (void)name_count;
+    struct lmp_chan *lc = rpc->lmp_chan;
+    errval_t err;
+
+    // allocate and map a frame, hijacking the aos string payload
+    struct capref frame;
+    void *buf;
+    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for elf module names array\n");
+    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+
+    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+    payload->rpc = rpc;
+    payload->frame = frame;
+    payload->len = BASE_PAGE_SIZE;
+
+    // send the frame and the length on the channel
+    err = lmp_chan_alloc_recv_slot(lc);
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+    err = lmp_chan_register_send(lc, get_default_waitset(), 
+                                 MKCLOSURE(send_get_elf_mod_names_handler, (void *)payload));
+    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+    event_dispatch(get_default_waitset());
+    event_dispatch(get_default_waitset());
+
+    // verify contents of frame
+    struct get_elf_mod_names_output* output_mod_names = (struct get_elf_mod_names_output*) buf;
+    // debug_printf("here is the number of elf mod names: %d\n", output_mod_names->num_names);
+    // debug_printf("here are the names:\n");
+    *names = &output_mod_names->names;
+    *name_count = output_mod_names->num_names;
 
     free(payload);
     return SYS_ERR_OK;

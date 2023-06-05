@@ -20,6 +20,9 @@
 
 #define MAX_PROC_PAGES 1 << 16   // 256 mib (65536 pages)
 
+#define MOD_NAME_MAX_NUM 32
+#define MOD_NAME_LEN 64
+
 
 /// defines the transport backend of the RPC channel
 enum aos_rpc_transport {
@@ -42,6 +45,7 @@ enum msg_type {
     PID_ACK,
     RAM_CAP_ACK,
     GET_ALL_PIDS,
+    GET_MOD_NAMES,
     GET_PID,
     EXIT_MSG,
     WAIT_MSG,
@@ -141,6 +145,11 @@ struct aos_rpc_ram_cap_resp_payload {
 struct get_all_pids_frame_output {
     size_t      num_pids;
     domainid_t  pids[128];
+};
+
+struct get_elf_mod_names_output {
+    int      num_names;
+    char     names[MOD_NAME_MAX_NUM][MOD_NAME_LEN];
 };
 
 struct get_pid_frame_output {
@@ -399,6 +408,18 @@ errval_t aos_rpc_proc_get_name(struct aos_rpc *chan, domainid_t pid, char **name
  */
 errval_t aos_rpc_proc_get_pid(struct aos_rpc *chan, const char *name, domainid_t *pid);
 
+/**
+ * @brief obtains a list of all elf memory modules in the system
+ *
+ * @param[in]  chan       the RPC channel to use (process channel)
+ * @param[out] names       array of strings of all elf mem module names in the system (freed by caller)
+ * @param[out] name_count  the number of names in the list
+ *
+ * @return SYS_ERR_OK on success, or error value on failure
+ */
+errval_t aos_rpc_list_elf_mod_names(struct aos_rpc *rpc, 
+                                    char (**names)[][MOD_NAME_LEN], 
+                                    int *name_count);
 
 /**
  * @brief pauses or suspends the execution of a running process

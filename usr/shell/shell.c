@@ -131,6 +131,17 @@ int main(int argc, char *argv[]) {
             } else {
                 printf("usage: kill [PID]\n");
             }
+        } else if (is_string(tokens[0], "lsmod")) {
+            // print elf modules
+            printf("Elf modules on boot image:\n");
+            char (*names)[][MOD_NAME_LEN];
+            int name_count;
+            aos_rpc_list_elf_mod_names(rpc, &names, &name_count);
+            for (int i = 0; i < name_count; i++) {
+                printf("%s\n", (*names)[i]);
+            }
+        } else if (is_string(tokens[0], "help")) {
+            printf("Available commands: echo run ps kill lsmod help\n");
         } else {
             printf("unknown command %s\n", tokens[0]);
         }

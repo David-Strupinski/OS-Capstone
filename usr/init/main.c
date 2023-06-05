@@ -25,6 +25,7 @@
 #include <grading/grading.h>
 #include <grading/io.h>
 #include <spawn/spawn.h>
+#include <spawn/multiboot.h>
 
 #include "coreboot.h"
 #include "mem_alloc.h"
@@ -43,6 +44,9 @@
 bool qemu;
 struct pl011_s *pl011;
 struct lpuart_s *lpuart;
+
+int num_mod_names;
+char mod_names[MOD_NAME_MAX_NUM][MOD_NAME_LEN];
 
 void gen_recv_handler(void *arg)
 {
@@ -466,6 +470,39 @@ void gen_recv_handler(void *arg)
                 return;
             }
             break;
+        case GET_MOD_NAMES:
+            // debug_printf("is get_mod_names message\n");
+            while (err_is_fail(err)) {
+                debug_printf("\n\n\nlooks like the code ran\n\n\n");
+                // if (!lmp_err_is_transient(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(gen_recv_handler, arg));
+                // if (err_is_fail(err)) {
+                //     DEBUG_ERR(err, "registering receive handler\n");
+                //     return;
+                // }
+                // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
+            }
+
+            void *buf15;
+            err = paging_map_frame_attr(get_current_paging_state(), &buf15, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
+            struct get_elf_mod_names_output * output_mod_names = (struct get_elf_mod_names_output*) buf15;
+
+            for (int i = 0; i < num_mod_names; i++) {
+                strncpy(output_mod_names->names[i], mod_names[i], MOD_NAME_LEN);
+                // debug_printf("added module: %s\n", output_mod_names->names[i]);
+            }
+            output_mod_names->num_names = num_mod_names;
+            // debug_printf("number of modules added: %d\n", output_mod_names->num_names);
+
+            err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
+            if (err_is_fail(err)) {
+                DEBUG_ERR(err, "registering send handler\n");
+                return;
+            }
+            break;
         default:
             // i don't know
             debug_printf("received unknown message type\n");
@@ -704,6 +741,18 @@ bsp_main(int argc, char *argv[]) {
     // DO NOT REMOVE THE FOLLOWING LINE!
     grading_test_late();
 
+    // Copy module names into mod_names array
+    num_mod_names = 0;
+    for (int i = 0; i < (int) bi->regions_length; i++) {
+        if (bi->regions[i].mr_type == RegionType_Module) {
+            const char* name = multiboot_module_name(&bi->regions[i]);
+            strncpy(mod_names[num_mod_names], name, MOD_NAME_LEN);
+            // debug_printf("added module: %s\n", mod_names[num_mod_names]);
+            num_mod_names++;
+        }
+    }
+    // debug_printf("number of modules added: %d\n", num_mod_names);
+
     // spawn the shell
     domainid_t shell_pid;
     proc_mgmt_spawn_with_cmdline("shell", 0, &shell_pid);
@@ -847,6 +896,15 @@ app_main(int argc, char *argv[]) {
 
     // TODO (M7)
     //  - initialize subsystems for nameservice, distops, ...
+
+    // Copy module names into mod_names array
+    for (int i = 1; i < (int) bi->regions_length; i++) {
+        const char* name = multiboot_module_name(&bi->regions[i]);
+        strncpy(mod_names[i - 1], name, MOD_NAME_LEN);
+        // debug_printf("added module: %s\n", mod_names[i - 1]);
+    }
+    num_mod_names = (int) bi->regions_length - 1;
+    // debug_printf("number of modules added: %d\n", num_mod_names);
 
     // TODO(M5): signal the other core that we're up and running
 

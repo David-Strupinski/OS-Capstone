@@ -3,6 +3,7 @@
 #include <aos/aos.h>
 #include <aos/aos_rpc.h>
 #include <aos/deferred.h>
+#include <aos/systime.h>
 
 #define LINE_LENGTH 78
 #define MAX_TOKENS 32
@@ -12,6 +13,124 @@ static int is_string(char *a, char *b) {
     return strcmp(a, b) == 0 && strlen(a) == strlen(b);
 }
 
+// handle a single command (represented as a string of tokens)
+static void handle_command(char **tokens, int num_tokens) {
+    struct aos_rpc *rpc = aos_rpc_get_serial_channel();
+    if (is_string(tokens[0], "echo")) {
+            // echo following token back to user
+            if (num_tokens > 1) printf("%s", tokens[1]);
+            printf("\n");
+        } else if (is_string(tokens[0], "run_memtest")) {
+            // determine size
+            int64_t size = BASE_PAGE_SIZE;  // default to one page
+            if (num_tokens > 1) {
+                int64_t new_size = strtol(tokens[1], NULL, 10);
+                if (new_size > 0) {
+                    size = new_size;
+                } else {
+                    printf("Invalid size. Deafulting to 4096.\n");
+                }
+            }
+
+            // malloc some memory
+            char *memory = malloc(size);
+            if (memory == NULL) {
+                printf("Couldn't allocate memory.\n");
+                return;
+            }
+
+            // Write to the memory.
+            for (int64_t i = 0; i < size; i++) {
+                memory[i] = i % sizeof(char);
+            }
+
+            // Read from the memory.
+            bool failed = false;
+            for (int64_t i = 0; i < size; i++) {
+                if (memory[i] != i % sizeof(char)) {
+                    failed = true;
+                    printf("Memory test failed %lu bytes into chunk.\n");
+                    break;
+                }
+            }
+
+            if (!failed) {
+                printf("Memory test succeeded.\n");
+            }
+        } else if (is_string(tokens[0], "run")) {
+            // spawn a process
+            if (num_tokens > 1) {
+                // create cmdline
+                char cmdline[LINE_LENGTH];
+                int cmdline_index = 0;
+                for (int i = 1; i < num_tokens; i++) {
+                    // ignore &
+                    if (i == num_tokens - 1 && is_string(tokens[i], "&")) continue;
+
+                    strcpy(&cmdline[cmdline_index], tokens[i]);
+                    cmdline_index += strlen(tokens[i]);
+                    cmdline[cmdline_index] = ' ';
+                    cmdline_index++;
+                }
+
+                // spawn the process
+                domainid_t pid;
+                errval_t err = aos_rpc_proc_spawn_with_cmdline(rpc, cmdline, disp_get_core_id(), &pid);
+                if (err_is_fail(err) || pid == SPAWN_ERR_PID) {
+                    printf("unable to run %s\n", tokens[1]);
+                    return;
+                }
+                //barrelfish_usleep(100000);
+
+                // wait on the process if requested
+                if (!is_string(tokens[num_tokens - 1], "&")) {
+                    int status;
+                    aos_rpc_proc_wait(rpc, pid, &status);
+                    printf("%s exited with code %d\n", tokens[1], status);
+                } else {
+                    // just give the program a bit of time to put out the initial output
+                    barrelfish_usleep(100000);
+                }
+            } else {
+                printf("usage: run [cmdline] [&]\n");
+            }
+        } else if (is_string(tokens[0], "ps")) {
+            // print running processes
+            printf("PID:\tName:\n");
+            domainid_t *pids;
+            size_t num_pids;
+            aos_rpc_proc_get_all_pids(rpc, &pids, &num_pids);
+            for (size_t i = 0; i < num_pids; i++) {
+                char *proc_name;
+                aos_rpc_proc_get_name(rpc, pids[i], &proc_name);
+                printf("%d\t%s\n", pids[i], proc_name);
+            }
+        } else if (is_string(tokens[0], "kill")) {
+            // kill a process
+            // TODO: implement actually killing a process...
+            if (num_tokens > 1) {
+                domainid_t pid = strtol(tokens[1], NULL, 10);
+                aos_rpc_proc_kill(rpc, pid);
+            } else {
+                printf("usage: kill [PID]\n");
+            }
+        } else if (is_string(tokens[0], "lsmod")) {
+            // print elf modules
+            printf("Elf modules on boot image:\n");
+            char (*names)[][MOD_NAME_LEN];
+            int name_count;
+            aos_rpc_list_elf_mod_names(rpc, &names, &name_count);
+            for (int i = 0; i < name_count; i++) {
+                printf("%s\n", (*names)[i]);
+            }
+        } else if (is_string(tokens[0], "help")) {
+            printf("Available commands: echo run_memtest run ps kill lsmod help\n");
+        } else {
+            printf("unknown command %s\n", tokens[0]);
+        }
+}
+
+// main command loop
 int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
@@ -73,117 +192,19 @@ int main(int argc, char *argv[]) {
         if (num_tokens == 0) continue;
 
         // handle command
-        if (is_string(tokens[0], "echo")) {
-            // echo following token back to user
-            if (num_tokens > 1) printf("%s", tokens[1]);
-            printf("\n");
-        } else if (is_string(tokens[0], "run_memtest")) {
-            // determine size
-            size_t size = BASE_PAGE_SIZE;  // default to one page
-            if (num_tokens > 1) {
-                size_t new_size = strtol(tokens[1], NULL, 10);
-                if (new_size > 0) {
-                    size = new_size;
-                } else {
-                    printf("Invalid size. Deafulting to 4096.");
-                }
+        if (is_string(tokens[0], "time")) {
+            // chop off the first token and time the command
+            for (int i = 0; i < num_tokens - 1; i++) {
+                tokens[i] = tokens[i + 1];
             }
-
-            // malloc some memory
-            char *memory = malloc(size);
-            if (memory == NULL) {
-                printf("Couldn't allocate memory.\n");
-                continue;
-            }
-
-            // Write to the memory.
-            for (size_t i = 0; i < size; i++) {
-                memory[i] = i % sizeof(char);
-            }
-
-            // Read from the memory.
-            bool failed = false;
-            for (size_t i = 0; i < size; i++) {
-                if (memory[i] != i % sizeof(char)) {
-                    failed = true;
-                    printf("Memory test failed %lu bytes into chunk.\n");
-                    break;
-                }
-            }
-
-            if (!failed) {
-                printf("Memory test succeeded.\n");
-            }
-        } else if (is_string(tokens[0], "run")) {
-            // spawn a process
-            if (num_tokens > 1) {
-                // create cmdline
-                char cmdline[LINE_LENGTH];
-                int cmdline_index = 0;
-                for (int i = 1; i < num_tokens; i++) {
-                    // ignore &
-                    if (i == num_tokens - 1 && is_string(tokens[i], "&")) continue;
-
-                    strcpy(&cmdline[cmdline_index], tokens[i]);
-                    cmdline_index += strlen(tokens[i]);
-                    cmdline[cmdline_index] = ' ';
-                    cmdline_index++;
-                }
-
-                // spawn the process
-                domainid_t pid;
-                errval_t err = aos_rpc_proc_spawn_with_cmdline(rpc, cmdline, disp_get_core_id(), &pid);
-                if (err_is_fail(err) || pid == SPAWN_ERR_PID) {
-                    printf("unable to run %s\n", tokens[1]);
-                    continue;
-                }
-                //barrelfish_usleep(100000);
-
-                // wait on the process if requested
-                if (!is_string(tokens[num_tokens - 1], "&")) {
-                    int status;
-                    aos_rpc_proc_wait(rpc, pid, &status);
-                    printf("%s exited with code %d\n", tokens[1], status);
-                } else {
-                    // just give the program a bit of time to put out the initial output
-                    barrelfish_usleep(100000);
-                }
-            } else {
-                printf("usage: run [cmdline] [&]\n");
-            }
-        } else if (is_string(tokens[0], "ps")) {
-            // print running processes
-            printf("PID:\tName:\n");
-            domainid_t *pids;
-            size_t num_pids;
-            aos_rpc_proc_get_all_pids(rpc, &pids, &num_pids);
-            for (size_t i = 0; i < num_pids; i++) {
-                char *proc_name;
-                aos_rpc_proc_get_name(rpc, pids[i], &proc_name);
-                printf("%d\t%s\n", pids[i], proc_name);
-            }
-        } else if (is_string(tokens[0], "kill")) {
-            // kill a process
-            // TODO: implement actually killing a process...
-            if (num_tokens > 1) {
-                domainid_t pid = strtol(tokens[1], NULL, 10);
-                aos_rpc_proc_kill(rpc, pid);
-            } else {
-                printf("usage: kill [PID]\n");
-            }
-        } else if (is_string(tokens[0], "lsmod")) {
-            // print elf modules
-            printf("Elf modules on boot image:\n");
-            char (*names)[][MOD_NAME_LEN];
-            int name_count;
-            aos_rpc_list_elf_mod_names(rpc, &names, &name_count);
-            for (int i = 0; i < name_count; i++) {
-                printf("%s\n", (*names)[i]);
-            }
-        } else if (is_string(tokens[0], "help")) {
-            printf("Available commands: echo run_memtest run ps kill lsmod help\n");
+            num_tokens--;
+            uint32_t before_time = systime_now();
+            handle_command(tokens, num_tokens);
+            uint32_t after_time = systime_now();
+            uint32_t microseconds = systime_to_us(after_time - before_time);
+            printf("Command completed in %d microseconds.\n", microseconds);
         } else {
-            printf("unknown command %s\n", tokens[0]);
+            handle_command(tokens, num_tokens);
         }
     }
     return EXIT_SUCCESS;

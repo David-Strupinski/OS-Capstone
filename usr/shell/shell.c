@@ -77,6 +77,43 @@ int main(int argc, char *argv[]) {
             // echo following token back to user
             if (num_tokens > 1) printf("%s", tokens[1]);
             printf("\n");
+        } else if (is_string(tokens[0], "run_memtest")) {
+            // determine size
+            size_t size = BASE_PAGE_SIZE;  // default to one page
+            if (num_tokens > 1) {
+                size_t new_size = strtol(tokens[1], NULL, 10);
+                if (new_size > 0) {
+                    size = new_size;
+                } else {
+                    printf("Invalid size. Deafulting to 4096.");
+                }
+            }
+
+            // malloc some memory
+            char *memory = malloc(size);
+            if (memory == NULL) {
+                printf("Couldn't allocate memory.\n");
+                continue;
+            }
+
+            // Write to the memory.
+            for (size_t i = 0; i < size; i++) {
+                memory[i] = i % sizeof(char);
+            }
+
+            // Read from the memory.
+            bool failed = false;
+            for (size_t i = 0; i < size; i++) {
+                if (memory[i] != i % sizeof(char)) {
+                    failed = true;
+                    printf("Memory test failed %lu bytes into chunk.\n");
+                    break;
+                }
+            }
+
+            if (!failed) {
+                printf("Memory test succeeded.\n");
+            }
         } else if (is_string(tokens[0], "run")) {
             // spawn a process
             if (num_tokens > 1) {
@@ -141,7 +178,7 @@ int main(int argc, char *argv[]) {
                 printf("%s\n", (*names)[i]);
             }
         } else if (is_string(tokens[0], "help")) {
-            printf("Available commands: echo run ps kill lsmod help\n");
+            printf("Available commands: echo run_memtest run ps kill lsmod help\n");
         } else {
             printf("unknown command %s\n", tokens[0]);
         }

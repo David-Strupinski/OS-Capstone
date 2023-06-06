@@ -29,7 +29,7 @@
 
 #include "coreboot.h"
 #include "mem_alloc.h"
-#include <proc_mgmt/proc_mgmt.h>
+//#include <proc_mgmt/proc_mgmt.h>
 #include "proc_mgmt.h"
 
 #include <barrelfish_kpi/startup_arm.h>
@@ -409,25 +409,16 @@ void gen_recv_handler(void *arg)
             // debug_printf("is wait message\n");
             while (err_is_fail(err)) {
                 debug_printf("\n\n\nlooks like the code ran\n\n\n");
-                // if (!lmp_err_is_transient(err)) {
-                //     DEBUG_ERR(err, "registering receive handler\n");
-                //     return;
-                // }
-                // err = lmp_chan_register_recv(rpc->lmp_chan, get_default_waitset(s), MKCLOSURE(gen_recv_handler, arg));
-                // if (err_is_fail(err)) {
-                //     DEBUG_ERR(err, "registering receive handler\n");
-                //     return;
-                // }
-                // err = lmp_chan_recv(rpc->lmp_chan, &msg, &rpc->lmp_chan->remote_cap);
             }
 
             void *buf13;
             err = paging_map_frame_attr(get_current_paging_state(), &buf13, msg.words[1], remote_cap, VREGION_FLAGS_READ_WRITE);
             domainid_t pid3 = ((int*)buf13)[0];
-            // debug_printf("heres the pid we recieved: %d\n", pid3);
-            proc_mgmt_wait(pid3, (int*)buf13);
-            // debug_printf("heres the exit code we're sending: %d\n", *((int*)buf13));
-            // debug_printf("made it to the end of receiving\n");
+            if (proc_mgmt_has_terminated(pid3)) {
+                proc_mgmt_wait(pid3, (int*)buf13);
+            } else {
+                *(int*)buf13 = NOT_TERMINATED_PID;
+            }
             err = lmp_chan_register_send(rpc->lmp_chan, get_default_waitset(), MKCLOSURE(send_ack_handler, (void*) rpc));
             if (err_is_fail(err)) {
                 DEBUG_ERR(err, "registering send handler\n");

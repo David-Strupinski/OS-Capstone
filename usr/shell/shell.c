@@ -133,17 +133,20 @@ int main(int argc, char *argv[]) {
                 // spawn the process
                 domainid_t pid;
                 errval_t err = aos_rpc_proc_spawn_with_cmdline(rpc, cmdline, disp_get_core_id(), &pid);
-                if (err_is_fail(err) || pid == 99999) {
+                if (err_is_fail(err) || pid == SPAWN_ERR_PID) {
                     printf("unable to run %s\n", tokens[1]);
                     continue;
                 }
-                barrelfish_usleep(100000);
+                //barrelfish_usleep(100000);
 
                 // wait on the process if requested
                 if (!is_string(tokens[num_tokens - 1], "&")) {
                     int status;
-                    aos_rpc_proc_wait(rpc, pid, &status);  // TODO: wait() only works when the process has exited...
+                    aos_rpc_proc_wait(rpc, pid, &status);
                     printf("%s exited with code %d\n", tokens[1], status);
+                } else {
+                    // just give the program a bit of time to put out the initial output
+                    barrelfish_usleep(100000);
                 }
             } else {
                 printf("usage: run [cmdline] [&]\n");

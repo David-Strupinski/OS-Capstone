@@ -14,6 +14,7 @@
 
 #include <aos/aos.h>
 #include <aos/aos_rpc.h>
+#include <aos/deferred.h>
 #include <grading/grading.h>
 #include <barrelfish_kpi/startup_arm.h>
 #include <barrelfish_kpi/asm_inlines_arch.h>
@@ -1228,42 +1229,45 @@ errval_t aos_rpc_proc_exit(struct aos_rpc *rpc, int status)
  */
 errval_t aos_rpc_proc_wait(struct aos_rpc *rpc, domainid_t pid, int *status)
 {
-    // make compiler happy about unused parameters
-    (void)rpc;
-    (void)pid;
-    (void)status;
+    bool terminated = false;
+    do {
+        struct lmp_chan *lc = rpc->lmp_chan;
+        errval_t err;
 
-    // debug_printf("\n\n\n\nentered wait api!\n\n\n\n\n");
-    struct lmp_chan *lc = rpc->lmp_chan;
-    errval_t err;
+        // allocate and map a frame, copying to it the string contents
+        struct capref frame;
+        void *buf;
+        err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
+        DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
+        err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
+        *((domainid_t*) buf) = pid;
+        // pass the string frame and length in the payload
+        struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
+        payload->rpc = rpc;
+        payload->frame = frame;
+        payload->len = BASE_PAGE_SIZE;
 
-    // allocate and map a frame, copying to it the string contents
-    struct capref frame;
-    void *buf;
-    err = frame_alloc(&frame, BASE_PAGE_SIZE, NULL);
-    DEBUG_ERR_ON_FAIL(err, "couldn't allocate frame for string\n");
-    err = paging_map_frame_attr(get_current_paging_state(), &buf, BASE_PAGE_SIZE, frame, VREGION_FLAGS_READ_WRITE);
-    *((domainid_t*) buf) = pid;
-    // pass the string frame and length in the payload
-    struct aos_rpc_string_payload *payload = malloc(sizeof(struct aos_rpc_string_payload));
-    payload->rpc = rpc;
-    payload->frame = frame;
-    payload->len = BASE_PAGE_SIZE;
+        // send the frame and the length on the channel
+        err = lmp_chan_alloc_recv_slot(lc);
+        DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
+        err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_wait_handler, (void *)payload));
+        DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
+        event_dispatch(get_default_waitset());
+        event_dispatch(get_default_waitset());
 
-    // send the frame and the length on the channel
-    err = lmp_chan_alloc_recv_slot(lc);
-    DEBUG_ERR_ON_FAIL(err, "lmp_chan_alloc_recv_slot");
-    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_wait_handler, (void *)payload));
-    DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
-    event_dispatch(get_default_waitset());
-    event_dispatch(get_default_waitset());
+        // verify contents of frame
+        struct wait_frame_output* output = (struct wait_frame_output*) buf;
+        // debug_printf("returned exit code: %d\n", output->status);
+        *status = output->status;
 
-    // verify contents of frame
-    struct wait_frame_output* output = (struct wait_frame_output*) buf;
-    // debug_printf("returned exit code: %d\n", output->status);
-    *status = output->status;
-    // debug_printf("heres the value at status: %d\n", *status);
-    free(payload);
+        if (*status != NOT_TERMINATED_PID) {
+            terminated = true;
+        } else {
+            thread_yield();
+            barrelfish_usleep(100000);
+        }
+        free(payload);
+    } while (terminated == false);
     return SYS_ERR_OK;
 }
 

@@ -23,6 +23,9 @@
 #define MOD_NAME_MAX_NUM 32
 #define MOD_NAME_LEN 64
 
+#define SPAWN_ERR_PID 999990
+#define NOT_TERMINATED_PID 999991
+
 
 /// defines the transport backend of the RPC channel
 enum aos_rpc_transport {

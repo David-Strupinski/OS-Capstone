@@ -262,6 +262,9 @@ errval_t proc_mgmt_exit(int status);
  */
 errval_t proc_mgmt_wait(domainid_t pid, int *status);
 
+// returns whether or not a process has terminated
+bool proc_mgmt_has_terminated(domainid_t pid);
+
 
 /**
  * @brief terminates the process with the given process id

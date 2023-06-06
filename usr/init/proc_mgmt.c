@@ -150,7 +150,7 @@ errval_t proc_mgmt_spawn_with_caps(int argc, const char *argv[], int capc, struc
     struct mem_region* module = multiboot_find_module(bi, argv[0]);
     if (module == NULL) {
         // debug_printf("multiboot_find_module failed to find %s\n", argv[0]);
-        *pid = 99999;
+        *pid = SPAWN_ERR_PID;
         return SPAWN_ERR_FIND_MODULE;
     }
 
@@ -244,7 +244,7 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
                     domainid_t spawn_pid;
                     err = spawn_with_cmdline_same_core(recv_msg.payload, &spawn_pid);
                     if (err_is_fail(err)) {
-                        spawn_pid = 99999;
+                        spawn_pid = SPAWN_ERR_PID;
                     }
 
                     // send pid back in ack
@@ -695,6 +695,17 @@ errval_t proc_mgmt_wait(domainid_t pid, int *status)
     return SPAWN_ERR_DOMAIN_NOTFOUND;
 }
 
+// returns whether or not a process has terminated
+bool proc_mgmt_has_terminated(domainid_t pid) {
+    struct spawninfo *curr = root;
+    while (curr != NULL) {
+        if (curr->pid == pid) {
+            return (curr->state == SPAWN_STATE_TERMINATED || curr->state == SPAWN_STATE_KILLED);
+        }
+        curr = curr->next;
+    }
+    return false;
+}
 
 /**
  * @brief tells the process manager than the process with pid has terminated.

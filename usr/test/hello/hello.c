@@ -18,6 +18,7 @@
 #include <stdio.h>
 
 #include <aos/aos.h>
+#include <aos/deferred.h>
 #include <grading/grading.h>
 #include <grading/io.h>
 
@@ -29,6 +30,10 @@ int main(int argc, char *argv[])
     for (int i = 0; i < argc; i++) {
         grading_printf("argv[%d] = %s\n", i, argv[i]);
     }
+
+    printf("Exiting in five seconds...\n");
+    barrelfish_usleep(5000000);
+
 
     return EXIT_SUCCESS;
 

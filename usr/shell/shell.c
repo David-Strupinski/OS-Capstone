@@ -262,9 +262,36 @@ static void handle_command(char **tokens, int num_tokens) {
             strcpy(new_path + strlen(current_path), tokens[1]);
             errval_t err = ramfs_remove(fs, new_path);
             if (err_is_fail(err)) {
-                printf("Unable to remove file.%s\n",err_getstring(err));
+                printf("Unable to remove file.\n",err_getstring(err));
             }
             free(new_path);
+        } else if (is_string(tokens[0], "cat")) {
+            if (num_tokens != 2) {
+                printf("usage: cat [file]\n");
+                return;
+            }
+            char *new_path = malloc(64);
+            strcpy(new_path, current_path);
+            strcpy(new_path + strlen(current_path), tokens[1]);
+            ramfs_handle_t handle;
+            errval_t err = ramfs_open(fs, new_path, &handle);
+            free(new_path);
+            if (err_is_fail(err)) {
+                printf("Unable to open file.\n",err_getstring(err));
+                return;
+            }
+            char bytes[17];  // small to demonstrate we can read arbitrary lengths
+            size_t bytes_read;
+            do {
+                err = ramfs_read(fs, handle, &bytes, 16, &bytes_read);
+                if (err_is_fail(err)) {
+                    printf("Error while reading file\n");
+                    return;
+                }
+                bytes[bytes_read] = 0;
+                printf("%s", bytes);
+            } while (bytes_read == 16);
+            printf("\n");
         } else {
             printf("unknown command %s\n", tokens[0]);
         }

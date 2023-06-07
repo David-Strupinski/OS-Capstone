@@ -699,7 +699,7 @@ errval_t ramfs_mount(const char *uri, ramfs_mount_t *retst)
 
     ramfs_handle_t handle;
     errval_t err;
-    char *text = "Here is some testing text.\n Here is another line.";
+    char *text = "Here is some testing text.\nHere is another line.";
     size_t bytes_written;
 
     err = ramfs_create(mount, "/test.txt", &handle);

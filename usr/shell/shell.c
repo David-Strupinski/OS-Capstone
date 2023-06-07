@@ -13,6 +13,8 @@ uint32_t var_exit_code = 0;
 domainid_t var_exit_pid = 0;
 ramfs_handle_t current_dir_handle;
 
+char *current_path;
+
 void *fs;
 
 // exact string comparison (strings must be null terminated)
@@ -197,16 +199,44 @@ static void handle_command(char **tokens, int num_tokens) {
         } else if (is_string(tokens[0], "help")) {
             printf("Available commands: echo run_memtest run ps kill lsmod time help\n");
         } else if (is_string(tokens[0], "ls")) {
+            ramfs_opendir(fs, current_path, &current_dir_handle);
             char *name = malloc(64);
             struct fs_fileinfo info;
             printf("Type\tSize\tName\n");
             while (true) {
                 errval_t err = ramfs_dir_read_next(fs, current_dir_handle, &name, &info);
                 if (err == FS_ERR_INDEX_BOUNDS) {
-                    return;
+                    break;
                 }
                 printf("%s\t%lu\t%s\n", info.type ? "Dir" : "File", info.size, name);
             }
+            ramfs_closedir(fs, current_path);
+        } else if (is_string(tokens[0], "mkdir")) {
+            if (num_tokens != 2) {
+                printf("usage: mkdir [dir]\n");
+                return;
+            }
+            char *new_path = malloc(64);
+            strcpy(new_path, current_path);
+            strcpy(new_path + strlen(current_path), tokens[1]);
+            errval_t err = ramfs_mkdir(fs, new_path);
+            if (err_is_fail(err)) {
+                printf("Unable to create directory.\n");
+            }
+            free(new_path);
+        } else if (is_string(tokens[0], "rmdir")) {
+            if (num_tokens != 2) {
+                printf("usage: rmdir [dir]\n");
+                return;
+            }
+            char *new_path = malloc(64);
+            strcpy(new_path, current_path);
+            strcpy(new_path + strlen(current_path), tokens[1]);
+            errval_t err = ramfs_rmdir(fs, new_path);
+            if (err_is_fail(err)) {
+                printf("Unable to remove directory.\n");
+            }
+            free(new_path);
         } else {
             printf("unknown command %s\n", tokens[0]);
         }
@@ -217,10 +247,11 @@ int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
     struct aos_rpc *rpc = aos_rpc_get_serial_channel();
-    errval_t err = ramfs_mount("/", &fs);
-    DEBUG_ERR_ON_FAIL(err, "couldn't mount RAMFS\n");
-    err = ramfs_opendir(fs, "/", &current_dir_handle);
-    DEBUG_ERR_ON_FAIL(err, "unable to open root directory\n");
+
+    // set up filesystem
+    current_path = (char *)malloc(64);
+    strcpy(current_path, "/");
+    errval_t err = ramfs_mount(current_path, &fs);
     DEBUG_ERR_ON_FAIL(err, "couldn't mount RAMFS\n");
     barrelfish_usleep(500000);
 

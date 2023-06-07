@@ -644,8 +644,8 @@ errval_t ramfs_rmdir(void *st, const char *path)
     }
 
     if (!handle->isdir) {
-        goto out;
         err =  FS_ERR_NOTDIR;
+        goto out;
     }
 
     if (handle->dirent->refcount != 1) {

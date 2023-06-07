@@ -8,6 +8,9 @@
 #define LINE_LENGTH 78
 #define MAX_TOKENS 32
 
+uint32_t var_exit_code = 0;
+domainid_t var_exit_pid = 0;
+
 // exact string comparison (strings must be null terminated)
 static int is_string(char *a, char *b) {
     return strcmp(a, b) == 0 && strlen(a) == strlen(b);
@@ -17,6 +20,16 @@ static int is_string(char *a, char *b) {
 static void handle_command(char **tokens, int num_tokens) {
     struct aos_rpc *rpc = aos_rpc_get_serial_channel();
     if (is_string(tokens[0], "echo")) {
+            // echo variable if present
+            if (num_tokens == 2 && is_string(tokens[1], "$!")) {
+                printf("%u\n", var_exit_pid);
+                return;
+            }
+            if (num_tokens == 2 && is_string(tokens[1], "$?")) {
+                printf("%u\n", var_exit_code);
+                return;
+            }
+
             // echo following token back to user
             if (num_tokens > 1) printf("%s", tokens[1]);
             printf("\n");
@@ -60,6 +73,12 @@ static void handle_command(char **tokens, int num_tokens) {
         } else if (is_string(tokens[0], "run")) {
             // spawn a process
             if (num_tokens > 1) {
+                // check that we aren't trying to run the shell or init
+                if (is_string(tokens[1], "shell") || is_string(tokens[1], "init")) {
+                    printf("%s is already running.\n", tokens[1]);
+                    return;
+                }
+
                 // create cmdline
                 char cmdline[LINE_LENGTH];
                 int cmdline_index = 0;
@@ -87,10 +106,14 @@ static void handle_command(char **tokens, int num_tokens) {
                     int status;
                     aos_rpc_proc_wait(rpc, pid, &status);
                     printf("%s exited with code %d\n", tokens[1], status);
+                    var_exit_code = status;
                 } else {
                     // just give the program a bit of time to put out the initial output
                     barrelfish_usleep(100000);
                 }
+
+                // update PID variable
+                var_exit_pid = pid;
             } else {
                 printf("usage: run [cmdline] [&]\n");
             }

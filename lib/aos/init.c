@@ -33,6 +33,10 @@
 
 #include <grading/grading.h>
 
+#define BUF_LEN 128
+char print_buffer[BUF_LEN];
+int buf_pos = 0;
+
 /// Are we the init domain (and thus need to take some special paths)?
 static bool init_domain;
 
@@ -109,10 +113,22 @@ static size_t aos_terminal_write(const char *buf, size_t len)
     size_t i = 0;
 
     while (i < len) {
-        if (buf[i] == '\n') aos_rpc_serial_putchar(aos_rpc_get_init_channel(), '\r');
-        err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), buf[i]);
-        if (err_is_fail(err)) {
+        // print the buffer on newline
+        if (buf[i] == '\n' || buf[i] == '\r' || buf[i] == 4) {
+            for (int j = 0; j < buf_pos; j++) {
+                err = aos_rpc_serial_putchar(aos_rpc_get_init_channel(), print_buffer[j]);
+                if (err_is_fail(err)) {
+                    return i;
+                }
+            }
+            aos_rpc_serial_putchar(aos_rpc_get_init_channel(), '\r');
+            aos_rpc_serial_putchar(aos_rpc_get_init_channel(), '\n');
+            buf_pos = 0;
+        } else if (buf_pos >= BUF_LEN) {
             return i;
+        } else {
+            print_buffer[buf_pos] = buf[i];
+            buf_pos++;
         }
         i++;
     }

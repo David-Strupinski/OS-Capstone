@@ -124,7 +124,7 @@ static void handle_command(char **tokens, int num_tokens) {
                 printf("%s\n", (*names)[i]);
             }
         } else if (is_string(tokens[0], "help")) {
-            printf("Available commands: echo run_memtest run ps kill lsmod help\n");
+            printf("Available commands: echo run_memtest run ps kill lsmod time help\n");
         } else {
             printf("unknown command %s\n", tokens[0]);
         }

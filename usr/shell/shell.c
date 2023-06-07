@@ -237,6 +237,34 @@ static void handle_command(char **tokens, int num_tokens) {
                 printf("Unable to remove directory.\n");
             }
             free(new_path);
+        } else if (is_string(tokens[0], "touch")) {
+            if (num_tokens != 2) {
+                printf("usage: touch [file]\n");
+                return;
+            }
+            char *new_path = malloc(64);
+            strcpy(new_path, current_path);
+            strcpy(new_path + strlen(current_path), tokens[1]);
+            ramfs_handle_t handle;
+            errval_t err = ramfs_create(fs, new_path, &handle);
+            if (err_is_fail(err)) {
+                printf("Unable to create file.\n");
+            }
+            ramfs_close(fs, handle);
+            free(new_path);
+        } else if (is_string(tokens[0], "rm")) {
+            if (num_tokens != 2) {
+                printf("usage: rm [file]\n");
+                return;
+            }
+            char *new_path = malloc(64);
+            strcpy(new_path, current_path);
+            strcpy(new_path + strlen(current_path), tokens[1]);
+            errval_t err = ramfs_remove(fs, new_path);
+            if (err_is_fail(err)) {
+                printf("Unable to remove file.%s\n",err_getstring(err));
+            }
+            free(new_path);
         } else {
             printf("unknown command %s\n", tokens[0]);
         }

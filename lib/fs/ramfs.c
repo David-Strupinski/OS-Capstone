@@ -706,8 +706,6 @@ errval_t ramfs_mount(const char *uri, ramfs_mount_t *retst)
     DEBUG_ERR_ON_FAIL(err, "couldn't create test file\n");
     (void)text;
     (void)bytes_written;
-    err = ramfs_open(mount, "/test.txt", &handle);
-    DEBUG_ERR_ON_FAIL(err, "couldn't open test file\n");
     err = ramfs_write(mount, handle, (void *)text, strlen(text), &bytes_written);
     DEBUG_ERR_ON_FAIL(err, "couldn't write to test file\n");
     err = ramfs_close(mount, handle);

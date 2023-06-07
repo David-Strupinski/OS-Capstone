@@ -238,25 +238,25 @@ errval_t proc_mgmt_spawn_with_cmdline(const char *cmdline, coreid_t core, domain
                 break;
             } else if (err == LIB_ERR_UMP_CHAN_RECV) {
                 // another message needs to be processed first
-                debug_printf("another message needs to be processed first\n");
-                err = ump_receive(get_ump_chan_mon(core, 0), SPAWN_CMDLINE, &recv_msg);
-                if (err == SYS_ERR_OK) {
-                    domainid_t spawn_pid;
-                    err = spawn_with_cmdline_same_core(recv_msg.payload, &spawn_pid);
-                    if (err_is_fail(err)) {
-                        spawn_pid = SPAWN_ERR_PID;
-                    }
+                // debug_printf("another message needs to be processed first\n");
+                // err = ump_receive(get_ump_chan_mon(core, 0), SPAWN_CMDLINE, &recv_msg);
+                // if (err == SYS_ERR_OK) {
+                //     domainid_t spawn_pid;
+                //     err = spawn_with_cmdline_same_core(recv_msg.payload, &spawn_pid);
+                //     if (err_is_fail(err)) {
+                //         spawn_pid = SPAWN_ERR_PID;
+                //     }
 
-                    // send pid back in ack
-                    struct ump_payload ack_msg;
-                    ack_msg.type = PID_ACK;
-                    ack_msg.send_core = my_core_id;
-                    ack_msg.recv_core = recv_msg.send_core;
-                    *(domainid_t *)ack_msg.payload = spawn_pid;
-                    err = ump_send(get_ump_chan_mon(recv_msg.send_core, 1), (char *)&ack_msg, sizeof(struct ump_payload));
-                    DEBUG_ERR_ON_FAIL(err, "couldn't send ack message to app core\n");
-                    debug_printf("successfully sent ack for intermediate message\n");
-                }
+                //     // send pid back in ack
+                //     struct ump_payload ack_msg;
+                //     ack_msg.type = PID_ACK;
+                //     ack_msg.send_core = my_core_id;
+                //     ack_msg.recv_core = recv_msg.send_core;
+                //     *(domainid_t *)ack_msg.payload = spawn_pid;
+                //     err = ump_send(get_ump_chan_mon(recv_msg.send_core, 1), (char *)&ack_msg, sizeof(struct ump_payload));
+                //     DEBUG_ERR_ON_FAIL(err, "couldn't send ack message to app core\n");
+                //     debug_printf("successfully sent ack for intermediate message\n");
+                // }
             }
             thread_yield();
         }

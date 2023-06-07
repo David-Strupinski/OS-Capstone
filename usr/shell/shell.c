@@ -99,7 +99,6 @@ static void handle_command(char **tokens, int num_tokens) {
                     printf("unable to run %s\n", tokens[1]);
                     return;
                 }
-                //barrelfish_usleep(100000);
 
                 // wait on the process if requested
                 if (!is_string(tokens[num_tokens - 1], "&")) {
@@ -116,6 +115,60 @@ static void handle_command(char **tokens, int num_tokens) {
                 var_exit_pid = pid;
             } else {
                 printf("usage: run [cmdline] [&]\n");
+            }
+        } else if (is_string(tokens[0], "oncore")) {
+            // TODO: we'll need to implement a UMP call if we want putchar and getchar 
+            // to work on other cores
+
+            // spawn a process
+            if (num_tokens > 2) {
+                long core = strtol(tokens[1], NULL, 10);
+                if (core < 0 || core > 3) {
+                    printf("Invalid core.\n");
+                }
+
+                // check that we aren't trying to run the shell or init
+                if (is_string(tokens[2], "shell") || is_string(tokens[2], "init")) {
+                    printf("%s is already running.\n", tokens[1]);
+                    return;
+                }
+
+                // create cmdline
+                char cmdline[LINE_LENGTH];
+                int cmdline_index = 0;
+                for (int i = 2; i < num_tokens; i++) {
+                    // ignore &
+                    if (i == num_tokens - 1 && is_string(tokens[i], "&")) continue;
+
+                    strcpy(&cmdline[cmdline_index], tokens[i]);
+                    cmdline_index += strlen(tokens[i]);
+                    cmdline[cmdline_index] = ' ';
+                    cmdline_index++;
+                }
+
+                // spawn the process
+                domainid_t pid;
+                errval_t err = aos_rpc_proc_spawn_with_cmdline(rpc, cmdline, core, &pid);
+                if (err_is_fail(err) || pid == SPAWN_ERR_PID) {
+                    printf("unable to run %s\n", tokens[2]);
+                    return;
+                }
+
+                // wait on the process if requested
+                if (!is_string(tokens[num_tokens - 1], "&")) {
+                    int status;
+                    aos_rpc_proc_wait(rpc, pid, &status);
+                    printf("%s exited with code %d\n", tokens[1], status);
+                    var_exit_code = status;
+                } else {
+                    // just give the program a bit of time to put out the initial output
+                    barrelfish_usleep(100000);
+                }
+
+                // update PID variable
+                var_exit_pid = pid;
+            } else {
+                printf("usage: oncore [coreid] [cmdline] [&]\n");
             }
         } else if (is_string(tokens[0], "ps")) {
             // print running processes

@@ -668,11 +668,6 @@ errval_t aos_rpc_get_ram_cap(struct aos_rpc *rpc, size_t bytes, size_t alignment
  */
 errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
 {
-    // make compiler happy about unused parameters
-    (void)rpc;
-    (void)retc;
-    // debug_printf("sending getchar\n");
-
     // TODO implement functionality to request a character from
     // the serial driver.
     struct lmp_chan *lc = rpc->lmp_chan;
@@ -680,12 +675,8 @@ errval_t aos_rpc_serial_getchar(struct aos_rpc *rpc, char *retc)
 
     err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_getchar_handler, (void *) rpc));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
-
     event_dispatch(get_default_waitset());
     event_dispatch(get_default_waitset());
-
-    // debug_printf("got char\n");
-
     *retc = global_retchar;
 
     return SYS_ERR_OK;
@@ -711,17 +702,15 @@ errval_t aos_rpc_serial_putchar(struct aos_rpc *rpc, char c)
     struct lmp_chan *lc = rpc->lmp_chan;
     errval_t err;
     // marshall args into num payload
-    struct aos_rpc_num_payload *payload = malloc(sizeof(struct aos_rpc_num_payload));
-    payload->rpc = rpc;
-    payload->val = c;
-    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_putchar_handler, (void *) payload));
+    struct aos_rpc_num_payload payload;
+    payload.rpc = rpc;
+    payload.val = c;
+    err = lmp_chan_register_send(lc, get_default_waitset(), MKCLOSURE(send_putchar_handler, (void *)&payload));
     DEBUG_ERR_ON_FAIL(err, "lmp_chan_send1");
     
     // debug_printf("made it to the end of putchar sending\n");
     event_dispatch(get_default_waitset());
     event_dispatch(get_default_waitset());
-    
-    free(payload);
 
     return SYS_ERR_OK;
 }

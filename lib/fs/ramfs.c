@@ -697,5 +697,21 @@ errval_t ramfs_mount(const char *uri, ramfs_mount_t *retst)
 
     *retst = mount;
 
+    ramfs_handle_t handle;
+    errval_t err;
+    char *text = "Here is some testing text.\n Here is another line.";
+    size_t bytes_written;
+
+    err = ramfs_create(mount, "/test.txt", &handle);
+    DEBUG_ERR_ON_FAIL(err, "couldn't create test file\n");
+    (void)text;
+    (void)bytes_written;
+    err = ramfs_open(mount, "/test.txt", &handle);
+    DEBUG_ERR_ON_FAIL(err, "couldn't open test file\n");
+    err = ramfs_write(mount, handle, (void *)text, strlen(text), &bytes_written);
+    DEBUG_ERR_ON_FAIL(err, "couldn't write to test file\n");
+    err = ramfs_close(mount, handle);
+    DEBUG_ERR_ON_FAIL(err, "couldn't close test file\n");
+
     return SYS_ERR_OK;
 }

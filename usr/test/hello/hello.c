@@ -31,8 +31,8 @@ int main(int argc, char *argv[])
         grading_printf("argv[%d] = %s\n", i, argv[i]);
     }
 
-    printf("Exiting in five seconds...\n");
-    barrelfish_usleep(5000000);
+    printf("Exiting in three seconds...\n");
+    barrelfish_usleep(3000000);
 
 
     return EXIT_SUCCESS;

@@ -11,6 +11,7 @@
 
 uint32_t var_exit_code = 0;
 domainid_t var_exit_pid = 0;
+ramfs_handle_t current_dir_handle;
 
 void *fs;
 
@@ -184,15 +185,6 @@ static void handle_command(char **tokens, int num_tokens) {
                 aos_rpc_proc_get_name(rpc, pids[i], &proc_name);
                 printf("%d\t%s\n", pids[i], proc_name);
             }
-        } else if (is_string(tokens[0], "kill")) {
-            // kill a process
-            // TODO: implement actually killing a process...
-            if (num_tokens > 1) {
-                domainid_t pid = strtol(tokens[1], NULL, 10);
-                aos_rpc_proc_kill(rpc, pid);
-            } else {
-                printf("usage: kill [PID]\n");
-            }
         } else if (is_string(tokens[0], "lsmod")) {
             // print elf modules
             printf("Elf modules on boot image:\n");
@@ -204,6 +196,17 @@ static void handle_command(char **tokens, int num_tokens) {
             }
         } else if (is_string(tokens[0], "help")) {
             printf("Available commands: echo run_memtest run ps kill lsmod time help\n");
+        } else if (is_string(tokens[0], "ls")) {
+            char *name = malloc(64);
+            struct fs_fileinfo info;
+            printf("Type\tSize\tName\n");
+            while (true) {
+                errval_t err = ramfs_dir_read_next(fs, current_dir_handle, &name, &info);
+                if (err == FS_ERR_INDEX_BOUNDS) {
+                    return;
+                }
+                printf("%s\t%lu\t%s\n", info.type ? "Dir" : "File", info.size, name);
+            }
         } else {
             printf("unknown command %s\n", tokens[0]);
         }
@@ -216,7 +219,10 @@ int main(int argc, char *argv[]) {
     struct aos_rpc *rpc = aos_rpc_get_serial_channel();
     errval_t err = ramfs_mount("/", &fs);
     DEBUG_ERR_ON_FAIL(err, "couldn't mount RAMFS\n");
-    barrelfish_usleep(1000000);
+    err = ramfs_opendir(fs, "/", &current_dir_handle);
+    DEBUG_ERR_ON_FAIL(err, "unable to open root directory\n");
+    DEBUG_ERR_ON_FAIL(err, "couldn't mount RAMFS\n");
+    barrelfish_usleep(500000);
 
     // prompt user for a command and execute it
     char line[LINE_LENGTH + 1];

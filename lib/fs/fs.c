@@ -64,5 +64,7 @@ errval_t filesystem_init(void)
  */
 errval_t filesystem_mount(const char *path, const char *uri)
 {
+    (void)path;
+    (void)uri;
     return LIB_ERR_NOT_IMPLEMENTED;
 }

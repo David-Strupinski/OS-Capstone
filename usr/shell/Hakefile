@@ -12,7 +12,7 @@
 
 [ build application { target = "shell",
   		              cFiles = [ "shell.c" ],
-                    addLibraries = [ "grading_support" ],
+                    addLibraries = [ "grading_support", "fs" ],
                     architectures = allArchitectures
                     }
 ]

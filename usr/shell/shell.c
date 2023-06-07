@@ -4,12 +4,15 @@
 #include <aos/aos_rpc.h>
 #include <aos/deferred.h>
 #include <aos/systime.h>
+#include <fs/ramfs.h>
 
 #define LINE_LENGTH 78
 #define MAX_TOKENS 32
 
 uint32_t var_exit_code = 0;
 domainid_t var_exit_pid = 0;
+
+void *fs;
 
 // exact string comparison (strings must be null terminated)
 static int is_string(char *a, char *b) {
@@ -211,6 +214,8 @@ int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
     struct aos_rpc *rpc = aos_rpc_get_serial_channel();
+    errval_t err = ramfs_mount("/", &fs);
+    DEBUG_ERR_ON_FAIL(err, "couldn't mount RAMFS\n");
     barrelfish_usleep(1000000);
 
     // prompt user for a command and execute it

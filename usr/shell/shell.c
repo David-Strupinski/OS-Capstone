@@ -237,6 +237,28 @@ static void handle_command(char **tokens, int num_tokens) {
                 printf("Unable to remove directory.\n");
             }
             free(new_path);
+        } else if (is_string(tokens[0], "cd")) {
+            if (num_tokens != 2) {
+                printf("usage: cd [absolute path]\n");
+                return;
+            }
+            ramfs_handle_t new_dir_handle;
+            errval_t err = ramfs_opendir(fs, tokens[1], &new_dir_handle);
+            if (err_is_fail(err)) {
+                printf("Couldn't change directories.\n");
+                return;
+            }
+            current_dir_handle = new_dir_handle;
+            strcpy(current_path, tokens[1]);
+            if (current_path[strlen(current_path) - 1] != '/') {
+                strcpy(current_path + strlen(current_path), "/");
+            }
+        } else if (is_string(tokens[0], "pwd")) {
+            if (num_tokens != 1) {
+                printf("usage: pwd\n");
+                return;
+            }
+            printf("%s\n", current_path);
         } else if (is_string(tokens[0], "touch")) {
             if (num_tokens != 2) {
                 printf("usage: touch [file]\n");

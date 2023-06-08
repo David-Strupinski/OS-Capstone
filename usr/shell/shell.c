@@ -203,6 +203,7 @@ static void handle_command(char **tokens, int num_tokens) {
 
             printf("File management:\n");
             printf("\tpwd\n");
+            printf("\tls\n");
             printf("\ttouch [file]\n");
             printf("\trm [file]\n");
             printf("\tcat [file]\n");

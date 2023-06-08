@@ -11,11 +11,10 @@
 
 uint32_t var_exit_code = 0;
 domainid_t var_exit_pid = 0;
-ramfs_handle_t current_dir_handle;
-
-char *current_path;
 
 void *fs;
+ramfs_handle_t current_dir_handle;
+char *current_path;
 
 // exact string comparison (strings must be null terminated)
 static int is_string(char *a, char *b) {
@@ -72,7 +71,6 @@ static void handle_command(char **tokens, int num_tokens) {
                     break;
                 }
             }
-
             if (!failed) {
                 printf("Memory test succeeded.\n");
             }
@@ -197,7 +195,27 @@ static void handle_command(char **tokens, int num_tokens) {
                 printf("%s\n", (*names)[i]);
             }
         } else if (is_string(tokens[0], "help")) {
-            printf("Available commands: echo run_memtest run ps kill lsmod time help\n");
+            // print a help message
+            printf("Process management:\n");
+            printf("\trun [cmdline] [&]\n");
+            printf("\toncore [coreid] [cmdline] [&]\n");
+            printf("\tps\n");
+
+            printf("File management:\n");
+            printf("\tpwd\n");
+            printf("\ttouch [file]\n");
+            printf("\trm [file]\n");
+            printf("\tcat [file]\n");
+            printf("\tmkdir [dir]\n");
+            printf("\trmdir [dir]\n");
+            printf("\tcd [dir]\n");
+
+            printf("Miscellaneous:\n");
+            printf("\techo [string]\n");
+            printf("\trun_memtest [size]\n");
+            printf("\tlsmod\n");
+            printf("\ttime [cmd]\n");
+            printf("\thelp\n");
         } else if (is_string(tokens[0], "ls")) {
             ramfs_opendir(fs, current_path, &current_dir_handle);
             char *name = malloc(64);
@@ -239,7 +257,7 @@ static void handle_command(char **tokens, int num_tokens) {
             free(new_path);
         } else if (is_string(tokens[0], "cd")) {
             if (num_tokens != 2) {
-                printf("usage: cd [absolute path]\n");
+                printf("usage: cd [dir]\n");
                 return;
             }
             ramfs_handle_t new_dir_handle;
@@ -315,7 +333,7 @@ static void handle_command(char **tokens, int num_tokens) {
             } while (bytes_read == 16);
             printf("\n");
         } else {
-            printf("unknown command %s\n", tokens[0]);
+            printf("Unknown command \"%s\".\n", tokens[0]);
         }
 }
 

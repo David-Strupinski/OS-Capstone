@@ -187,7 +187,7 @@ static void handle_command(char **tokens, int num_tokens) {
             }
         } else if (is_string(tokens[0], "lsmod")) {
             // print elf modules
-            printf("Elf modules on boot image:\n");
+            printf("ELF modules on boot image:\n");
             char (*names)[][MOD_NAME_LEN];
             int name_count;
             aos_rpc_list_elf_mod_names(rpc, &names, &name_count);
@@ -290,6 +290,7 @@ static void handle_command(char **tokens, int num_tokens) {
             errval_t err = ramfs_create(fs, new_path, &handle);
             if (err_is_fail(err)) {
                 printf("Unable to create file.\n");
+                return;
             }
             ramfs_close(fs, handle);
             free(new_path);
@@ -326,7 +327,7 @@ static void handle_command(char **tokens, int num_tokens) {
             do {
                 err = ramfs_read(fs, handle, &bytes, 16, &bytes_read);
                 if (err_is_fail(err)) {
-                    printf("Error while reading file\n");
+                    printf("Error while reading file.\n");
                     return;
                 }
                 bytes[bytes_read] = 0;
